@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2020 ModalAI, Inc.
+#
+
+[Unit]
+Description=voxl-imu-server
+SourcePath=/usr/bin/voxl-imu-server
+
+[Service]
+User=root
+Type=simple
+PIDFile=/run/voxl-imu-server.pid
+Restart=on-failure
+ExecStart=/bin/bash -c "/usr/bin/voxl-imu-server"
+
+[Install]
+WantedBy=multi-user.target
+
