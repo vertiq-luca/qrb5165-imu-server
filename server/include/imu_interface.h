@@ -55,11 +55,8 @@ typedef struct imu_self_test_result_t{
 #define FIFO_READ_BUF_LEN	4096
 
 // VOXL1 board revisions
-#define BOARD_M0054 5
-#define BOARD_M0069 4 // voxl-flight with two 42688 IMUs, both on top
-#define BOARD_M0019 3 // First voxl-flight with imu0=42688 and imu1=20948
-#define BOARD_M0006 2 // Blue VOXL1
-#define BOARD_HA942 1 // OLD green voxl boards with two 9250 IMUs
+#define BOARD_M0053 2 // rb5-flight
+#define BOARD_M0054 1 // qrb5165
 #define BOARD_UNKNOWN 0
 
 ////////////////////////////////////////////////////////////////////////////////

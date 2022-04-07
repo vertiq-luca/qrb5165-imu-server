@@ -4,12 +4,28 @@
 set(CALNAME voxl-calibrate-imu)
 add_executable(${CALNAME} voxl-calibrate-imu.c ../common/cal_file.c)
 include_directories(include ../common)
-target_link_libraries(${CALNAME} modal_pipe modal_json rc_math)
+
+target_link_libraries(${CALNAME}
+	${LIBQRB5165_IO_SO}
+	${LIBRC_MATH_SO}
+	${LIBMODAL_PIPE_SO}
+	${LIBMODAL_JSON_SO} 
+	m
+	pthread
+)
 
 set(CALTEMPNAME voxl-calibrate-imu-temp)
 add_executable(${CALTEMPNAME} voxl-calibrate-imu-temp.c ../common/cal_file.c)
 include_directories(include ../common)
-target_link_libraries(${CALTEMPNAME} modal_pipe modal_json m rc_math pthread)
+
+target_link_libraries(${CALTEMPNAME} 	
+	${LIBQRB5165_IO_SO}
+	${LIBRC_MATH_SO}
+	${LIBMODAL_PIPE_SO}
+	${LIBMODAL_JSON_SO} 
+	m 
+	pthread
+)
 
 
 

@@ -45,6 +45,7 @@
 #include "config_file.h"
 #include "cal_file.h"
 #include "imu_interface.h"
+#include "misc.h"
 
 #define PROCESS_NAME "voxl-imu-server" // for PID file name
 
@@ -264,6 +265,7 @@ static void _quit(int ret)
 
 static void* _read_thread_func(void* context)
 {
+	static int64_t next_time = 0;
 	int id = (intptr_t)context;
 	int ret, i;
 	imu_data_t data[MAX_FIFO_SAMPLES];
@@ -277,7 +279,6 @@ static void* _read_thread_func(void* context)
 
 	// run until the global main_running flag becomes 0
 	while(main_running){
-
 		// normal fifo mode with basic mode turned off
 		if(!en_basic_read){
 			// if fifo hasn't been started yet just wait for a request
@@ -324,7 +325,10 @@ static void* _read_thread_func(void* context)
 
 		// in basic mode or if delay is enabled in fifo mode, sleep a bit
 		if(en_basic_read) usleep(1000000/imu_sample_rate_hz[id]);
-		else if(delay>0)  usleep(delay);
+		else if (delay <= 0){
+			my_loop_sleep(imu_sample_rate_hz[id], &next_time);
+		}
+		else usleep(delay);
 	}
 
 	return NULL;

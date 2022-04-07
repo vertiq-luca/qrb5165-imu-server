@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2020 ModalAI Inc.
+ * Copyright 2021 ModalAI Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,41 +31,68 @@
  * POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
 
+#include <stdio.h>
+#include <unistd.h>
+#include <time.h>
+#include <errno.h>
 
-#ifndef CONFIG_FILE_H
-#define CONFIG_FILE_H
-
-#include <voxl_imu_server.h>
-
-
-////////////////////////////////////////////////////////////////////////////////
-// declare all config file fields here. define them in config_file.c
-////////////////////////////////////////////////////////////////////////////////
-extern int imu_enable[N_IMUS];
-extern int bus[N_IMUS];
-extern double imu_sample_rate_hz[N_IMUS];
-extern double imu_lp_cutoff_freq_hz[N_IMUS];
-extern int imu_rotate_common_frame[N_IMUS];
-
-/**
- * load the config file and populate the above extern variables
- *
- * @return     0 on success, -1 on failure
- */
-int config_file_read(void);
+#include "misc.h"
 
 
-/**
- * @brief      prints the current configuration values to the screen
- *
- *             this includes all of the extern variables listed above. If this
- *             is called before config_file_load then it will print the default
- *             values.
- *
- * @return     0 on success, -1 on failure
- */
-int config_file_print(void);
+int64_t my_time_monotonic_ns()
+{
+	struct timespec ts;
+	if(clock_gettime(CLOCK_MONOTONIC, &ts)){
+		fprintf(stderr,"ERROR calling clock_gettime\n");
+		return -1;
+	}
+	return (int64_t)ts.tv_sec*1000000000 + (int64_t)ts.tv_nsec;
+}
+
+int64_t my_time_realtime_ns()
+{
+	struct timespec ts;
+	if(clock_gettime(CLOCK_REALTIME, &ts)){
+		fprintf(stderr,"ERROR calling clock_gettime\n");
+		return -1;
+	}
+	return (int64_t)ts.tv_sec*1000000000 + (int64_t)ts.tv_nsec;
+}
 
 
+// sleep and timing functions, TODO these should go into a misc.c!
+void my_nanosleep(uint64_t ns){
+	struct timespec req,rem;
+	req.tv_sec = ns/1000000000;
+	req.tv_nsec = ns%1000000000;
+	// loop untill nanosleep sets an error or finishes successfully
+	errno=0; // reset errno to avoid false detection
+	while(nanosleep(&req, &rem) && errno==EINTR){
+		req.tv_sec = rem.tv_sec;
+		req.tv_nsec = rem.tv_nsec;
+	}
+	return;
+}
 
-#endif // end #define CONFIG_FILE_H
+
+int my_loop_sleep(double rate_hz, int64_t* next_time)
+{
+	int64_t current_time = my_time_monotonic_ns();
+
+	// static variable so we remember when we last woke up
+	if(*next_time<=0){
+		*next_time = current_time;
+	}
+
+	// try to maintain output data rate
+	*next_time += (1000000000.0/rate_hz);
+
+	// uh oh, we fell behind, warn and get back on track
+	if(*next_time<=current_time){
+		return -1;
+	}
+
+	my_nanosleep(*next_time-current_time);
+	return 0;
+}
+

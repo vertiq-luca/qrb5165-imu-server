@@ -46,9 +46,6 @@
 #define unlikely(x)	__builtin_expect (!!(x), 0)
 #endif
 
-
-// all MPU/ICM parts use spi mode 3, speed we may need to customize in the future
-#define SPI_MODE	3
 #define SPI_SPEED_INIT 1000000  // 1mbit, need to see if we can go any slower
 
 // colors for printing self-test results
@@ -92,8 +89,8 @@ static int imu_open_spi_bus(int id)
 	// allow this function to be called after init, just return
 	if(spi_running[id]) return 0;
 
-	if(voxl_spi_init(bus[id],SPI_MODE,SPI_SPEED_INIT)){
-		fprintf(stderr, "ERROR: in imu_open_spi_bus[id]\n");
+	if(voxl_spi_init(bus[id], SPI_MODE_3, SPI_SPEED_INIT)){
+		fprintf(stderr, "ERROR: in imu_open_spi_bus[%d]\n", id);
 		return -1;
 	}
 
@@ -175,7 +172,7 @@ int imu_self_test_print_results(int id, imu_self_test_result_t result)
 
 int imu_print_data(int id, imu_data_t data)
 {
-	printf("imu%d: A:%6.2f %6.2f %6.2f G:%6.2f %6.2f %6.2f T: %6.2f ts: %llu\n",\
+	printf("imu%d: A:%6.2f %6.2f %6.2f G:%6.2f %6.2f %6.2f T: %6.2f ts: %lu\n",\
 		id,
 		(double)data.accl_ms2[0],(double)data.accl_ms2[1],(double)data.accl_ms2[2],\
 		(double)data.gyro_rad[0],(double)data.gyro_rad[1],(double)data.gyro_rad[2],\
@@ -234,61 +231,13 @@ int imu_rotate_to_common_frame(int id, imu_data_t* data)
 {
 	float gtmp[3];
 	float atmp[3];
-	int i;
 
-	// M0069 with 2 42688 imus, both on top of the board
-	if(board_id == BOARD_M0069){
-		switch(id){
-			// imu on top by usb port
-			case 0:
-				data->gyro_rad[1] = -data->gyro_rad[1];
-				data->accl_ms2[1] = -data->accl_ms2[1];
-				data->gyro_rad[2] = -data->gyro_rad[2];
-				data->accl_ms2[2] = -data->accl_ms2[2];
-				break;
-
-			// imu on top my MIPI camera connectors
-			case 1:
-				data->gyro_rad[0] = -data->gyro_rad[0];
-				data->accl_ms2[0] = -data->accl_ms2[0];
-				data->gyro_rad[2] = -data->gyro_rad[2];
-				data->accl_ms2[2] = -data->accl_ms2[2];
-				break;
-
-			default:
-				fprintf(stderr, "ERROR: in %s, imu must be 0 or 1\n", __FUNCTION__);
-				return -1;
-		}
-	}
-	// all previous VOXL boards
-	else{
-		switch(id){
-			// imu on bottom by usb port
-			case 0:
-				data->gyro_rad[0] = -data->gyro_rad[0];
-				data->gyro_rad[1] = -data->gyro_rad[1];
-				data->accl_ms2[0] = -data->accl_ms2[0];
-				data->accl_ms2[1] = -data->accl_ms2[1];
-				break;
-
-			// imu on top my MIPI camera connectors
-			case 1:
-				for(i=0;i<3;i++){
-					gtmp[i]=data->gyro_rad[i];
-					atmp[i]=data->accl_ms2[i];
-				}
-				data->gyro_rad[0] =  gtmp[1];
-				data->gyro_rad[1] =  gtmp[0];
-				data->gyro_rad[2] = -gtmp[2];
-				data->accl_ms2[0] =  atmp[1];
-				data->accl_ms2[1] =  atmp[0];
-				data->accl_ms2[2] = -atmp[2];
-				break;
-
-			default:
-				fprintf(stderr, "ERROR: in %s, imu must be 0 or 1\n", __FUNCTION__);
-				return -1;
-		}
+	// BOARD_M0054 and MOO53 both have 1 appsproc 42688 imu
+	if(board_id == BOARD_M0054 || board_id == BOARD_M0053){
+		data->gyro_rad[1] = -data->gyro_rad[1];
+		data->accl_ms2[1] = -data->accl_ms2[1];
+		data->gyro_rad[2] = -data->gyro_rad[2];
+		data->accl_ms2[2] = -data->accl_ms2[2];
 	}
 	return 0;
 }
@@ -300,36 +249,15 @@ int imu_detect_board()
 		fprintf(stderr, "ERROR in %s detecting imu0\n", __FUNCTION__);
 		return -1;
 	}
-	if(imu_detect(1)){
-		fprintf(stderr, "ERROR in %s detecting imu1\n", __FUNCTION__);
-		return -1;
-	}
 
 	// now decide which board we are on based on IMUs
-	if(ic[1]==IMU_IC_ICM42688){
-		board_id = BOARD_M0069;
-		printf("Detected board M0069\n");
-	}
-	else if(ic[0]==IMU_IC_ICM42688 && ic[1]==IMU_IC_ICM20948){
-		board_id = BOARD_M0019;
-		printf("Detected board M0019\n");
-	}
-	else if(ic[0]==IMU_IC_ICM20948 && ic[1]==IMU_IC_ICM20948){
-		board_id = BOARD_M0006;
-		printf("Detected board M0006\n");
-	}
-	else if(ic[0]==IMU_IC_MPU9250){
-		board_id = BOARD_HA942;
-		printf("Detected board HA942\n");
-	}
-	else if(ic[0]==IMU_IC_ICM42688){
+	if(ic[0]==IMU_IC_ICM42688){
 		board_id = BOARD_M0054;
 		printf("Detected board M0054\n");
 	}
 	else{
 		board_id = BOARD_UNKNOWN;
 		fprintf(stderr, "WARNING unknown VOXL board configuration\n");
-		fprintf(stderr, " detected IMU 0 and 1 have types %d & %d\n", ic[0], ic[1]);
 	}
 	return 0;
 }
@@ -601,16 +529,13 @@ int imu_fifo_read(int id, imu_data_t* data, int* packets)
 	}
 	if(!fifo_running[id]) return 0;
 
-	int min_packets = imu_read_every_n_samples[id];
-	if(min_packets<1) min_packets = 1;
-
 	switch(ic[id]){
 	case IMU_IC_MPU9250:
-		return mpu9250_fifo_read(bus[id], min_packets, data, packets, fifo_buffer[id]);
+		return mpu9250_fifo_read(bus[id], data, packets, fifo_buffer[id]);
 	case IMU_IC_ICM20948:
-		return icm20948_fifo_read(bus[id], min_packets, data, packets, fifo_buffer[id]);
+		return icm20948_fifo_read(bus[id], data, packets, fifo_buffer[id]);
 	case IMU_IC_ICM42688:
-		return icm42688_fifo_read(bus[id], min_packets, data, packets, fifo_buffer[id]);
+		return icm42688_fifo_read(bus[id], data, packets, fifo_buffer[id]);
 	default:
 		fprintf(stderr, "ERROR: in imu_fifo_read() invalid ic part number\n");
 		fprintf(stderr, "call imu_detect first!\n");

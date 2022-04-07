@@ -246,6 +246,8 @@ int mpu9250_fifo_stop(int bus)
 
 int mpu9250_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buffer)
 {
+	static int n_empty_reads = 0;
+
 	int records = 0; // num packets read as reported by dsp
 	*packets = 0; // make sure we indicate nothing has been read if we return early
 
@@ -266,7 +268,12 @@ int mpu9250_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buf
 		return -1;
 	}
 	if(records==0){
-		// should never get here if min_packets>0
+		// should never pass mmore than a few empty reads in a row
+		n_empty_reads++;
+		if (n_empty_reads >= 10){
+			fprintf(stderr, "ERROR mpu9250_fifo_read: buffer was empty %d times in a row\n", n_empty_reads);
+			return -1;
+		}
 		return 0;
 	}
 	if(records>p_max){
@@ -340,6 +347,8 @@ int mpu9250_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buf
 	}
 
 	*packets = records;
+	n_empty_reads = 0;
+
 	return 0;
 }
 

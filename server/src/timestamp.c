@@ -51,10 +51,11 @@ int64_t calc_filtered_ts_ns(int64_t time_before_read, int records, double* clock
 	// data and returned right after grabbing it so ignore the time_before
 	// subtract a fudge factor for the RPC call latency
 	int64_t monotonic;
-	if(records==1) monotonic = voxl_apps_time_monotonic_ns() - 400000;
+
+
 	// otherwise assume what we read from the fifo was there when we went to
-	// read it add 400us for the RPC latency and subtract half of the
-	else monotonic = (time_before_read + 400000) - (500000000/odr);
+	// read it add 300us for half the fifo_count register read time and subtract half of the odr
+	monotonic = (time_before_read + 300000) - (500000000/odr);
 
 	// this is our best-guess given only clock_monotonic, but this is noisy!
 	int64_t filtered_ts_ns = monotonic;
@@ -80,7 +81,7 @@ int64_t calc_filtered_ts_ns(int64_t time_before_read, int records, double* clock
 			}
 		}
 		else if(en_print_timesync){
-			printf("using monotonic time, diff too big: %llu\n", diff);
+			printf("using monotonic time, diff too big: %lu\n", diff);
 		}
 
 		// diff should hover around 0 and just represent noise from the irregularity

@@ -46,6 +46,9 @@
 // enable hires fifo
 #define HIRES_FIFO
 
+// enable real time clock
+#define EN_RTC
+
 // we are locked into used 2000dps/16g FSRs with the HIRES FIFO mode!!
 static const float gyro_scale_16 = (2000.0*DEG_TO_RAD)/32767.0;
 static const float accl_scale_16 = (16.0*G_TO_MS2)/32767.0;
@@ -56,8 +59,8 @@ static int current_bank[16];
 static double configured_odr_hz[16];
 
 // ratio of imu clock speed to apps proc
-// imu runs faster. this value is estimated in realtime
-#define STARTING_CLOCK_RATIO	0.986
+// imu runs faster than requested due to 32.768khz clock instead of 32khz, start with this known correction factor, this value is estimated in realtime
+#define STARTING_CLOCK_RATIO	0.9765625
 static double clock_ratio[16];
 // keep track of timestamp so we can pick up next read
 static int last_read_was_good[16];
@@ -149,6 +152,24 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_DEVICE_CONFIG, val);
 	usleep(2000); // 2ms to be safe
 
+	#ifdef EN_RTC
+
+	// configure INTF_CONFIG1 for real time clock
+	val = 0x95; // default plus enable RTC_MODE
+	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_INTF_CONFIG1, val);
+
+	// now jump to back 1 for INTF_CONFIG5
+	if(__switch_to_bank(bus, 1)) return -1;
+
+	// configure INTF_CONFIG5 for real time clock
+	val = 0x04; // set pin 9 function to CLKIN
+	voxl_spi_write_reg_byte(bus, ICM42688_UB1_REG_INTF_CONFIG5, val);
+
+	// finally jump to back 0 to finish setup
+	if(__switch_to_bank(bus, 0)) return -1;
+
+	#endif
+
 	// turn on temp, accel and gyro in low noise mode, requires >200us wait after
 	val = TEMP_EN | GYRO_MODE_LOW_NOISE | ACCEL_MODE_LOW_NOISE;
 	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_PWR_MGMT0, val);
@@ -169,7 +190,7 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 	static const uint16_t AAF_DELTSQR	= 25;
 	static const uint8_t  AAF_BITSHIFT	= 10;
 
-	// write these AA filter settings to gyro in bank 2
+	// write these AA filter settings to gyro in bank 1
 	val = AAF_DELT;
 	voxl_spi_write_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC3, val);
 	val = (AAF_DELTSQR & 0xFF); // lower 8 bits of DELTSQR
@@ -340,6 +361,8 @@ int icm42688_fifo_stop(int bus)
 
 int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buffer)
 {
+	static int n_empty_reads = 0;
+
 	int records = 0;
 	*packets = 0; // make sure we indicate nothing has been read if we return early
 
@@ -374,7 +397,12 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		return -1;
 	}
 	if(records==0){
-		// should never get here if min_packets>0
+		// should never pass mmore than a few empty reads in a row
+		n_empty_reads++;
+		if (n_empty_reads >= 10){
+			fprintf(stderr, "ERROR icm42688_fifo_read: buffer was empty %d times in a row\n", n_empty_reads);
+			return -1;
+		}
 		return 0;
 	}
 	if(records>p_max){
@@ -490,7 +518,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		// place timestamp based on our previous filtering
 		data[i].timestamp_ns = filtered_ts_ns - ((records-i-1)*new_dt);
 	}
-
+	n_empty_reads = 0;
 	*packets = records;
 	return 0;
 }

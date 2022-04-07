@@ -290,6 +290,8 @@ int icm20948_fifo_stop(int bus)
 
 int icm20948_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buffer)
 {
+	static int n_empty_reads = 0;
+
 	int records = 0;
 	*packets = 0; // make sure we indicate nothing has been read if we return early
 
@@ -316,7 +318,12 @@ int icm20948_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		return -1;
 	}
 	if(records==0){
-		// should never get here if min_packets>0
+		// should never pass mmore than a few empty reads in a row
+		n_empty_reads++;
+		if (n_empty_reads >= 10){
+			fprintf(stderr, "ERROR icm20948_fifo_read: buffer was empty %d times in a row\n", n_empty_reads);
+			return -1;
+		}
 		return 0;
 	}
 	if(records>p_max){
@@ -391,6 +398,7 @@ int icm20948_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 	}
 
 	*packets = records;
+	n_empty_reads = 0;
 	return 0;
 }
 

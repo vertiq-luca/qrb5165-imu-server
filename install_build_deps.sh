@@ -9,14 +9,13 @@
 # in the ubuntu repositories you should specify the arm64 architecture to make
 # sure the correct one is installed in voxl-cross.
 DEPS_QRB5165="
-libvoxl-io
 librc-math
 libmodal-pipe
 libmodal-json
-voxl-cpu-monitor"
+voxl-cpu-monitor
+libvoxl-io"
 
 DEPS_APQ8096=""
-
 
 ## this list is just for tab-completion
 ## it's not an exhaustive list of platforms available.
