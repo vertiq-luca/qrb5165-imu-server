@@ -8,7 +8,7 @@ find_library(LIBQRB5165_IO_SO NAMES libvoxl_io.so HINTS /usr/lib )
 
 set(CMAKE_C_FLAGS "-g -std=gnu99 -Wall -Wextra -Wuninitialized \
 	-Wunused-variable -Wdouble-promotion -Wmissing-prototypes \
-	-Wmissing-declarations -Werror=undef -Wno-unused-function ${CMAKE_C_FLAGS}")
+	-Wmissing-declarations -Werror=undef -Wno-int-to-pointer-cast -Wno-unused-function ${CMAKE_C_FLAGS}")
 
 # server and client binaries
 add_subdirectory(server)

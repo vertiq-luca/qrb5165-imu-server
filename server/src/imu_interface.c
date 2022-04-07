@@ -227,11 +227,8 @@ int imu_apply_calibration(int id, imu_data_t* data)
 }
 
 
-int imu_rotate_to_common_frame(int id, imu_data_t* data)
+int imu_rotate_to_common_frame(__attribute__((unused)) int id, imu_data_t* data)
 {
-	float gtmp[3];
-	float atmp[3];
-
 	// BOARD_M0054 and MOO53 both have 1 appsproc 42688 imu
 	if(board_id == BOARD_M0054 || board_id == BOARD_M0053){
 		data->gyro_rad[1] = -data->gyro_rad[1];
