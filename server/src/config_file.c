@@ -43,9 +43,10 @@
 // define all the "Extern" variables from config_file.h and their defaults
 int		imu_enable[N_IMUS]					= {1,		0,		0,		0};
 int		bus[N_IMUS]							= {3,		1,		14,		5};
-double	imu_sample_rate_hz[N_IMUS]			= {100,	    100,	100,	100};
+double	imu_sample_rate_hz[N_IMUS]			= {1000,	1000,	1000,	1000};
 double	imu_lp_cutoff_freq_hz[N_IMUS]		= {92,		92,		92,		92};
 int		imu_rotate_common_frame[N_IMUS]		= {1,		0,		0,		0};
+double	imu_fifo_poll_rate_hz[N_IMUS]		= {100,	    100,	100,	100};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -59,22 +60,26 @@ int config_file_print(void)
 	printf("imu0_sample_rate_hz:             %4.1f\n",	imu_sample_rate_hz[0]);
 	printf("imu0_lp_cutoff_freq_hz:          %4.1f\n",	imu_lp_cutoff_freq_hz[0]);
 	printf("imu0_rotate_common_frame         %d\n",		imu_rotate_common_frame[0]);
+	printf("imu0_fifo_poll_rate_hz:          %4.1f\n",	imu_fifo_poll_rate_hz[0]);
 	printf("\n");
 	printf("imu1_enable:                     %d\n",		imu_enable[1]);
 	printf("imu1_bus:                        %d\n",		bus[1]);
 	printf("imu1_sample_rate_hz:             %4.1f\n",	imu_sample_rate_hz[1]);
 	printf("imu1_lp_cutoff_freq_hz:          %4.1f\n",	imu_lp_cutoff_freq_hz[1]);
 	printf("imu1_rotate_common_frame         %d\n",		imu_rotate_common_frame[1]);
+	printf("imu1_fifo_poll_rate_hz:          %4.1f\n",	imu_fifo_poll_rate_hz[1]);
 	printf("\n");
 	printf("aux_imu2_enable:                 %d\n",		imu_enable[2]);
 	printf("aux_imu2_spi_bus:                %d\n",		bus[2]);
 	printf("aux_imu2_sample_rate_hz:         %4.1f\n",	imu_sample_rate_hz[2]);
 	printf("aux_imu2_lp_cutoff_freq_hz:      %4.1f\n",	imu_lp_cutoff_freq_hz[2]);
+	printf("aux_imu2_fifo_poll_rate_hz:      %4.1f\n",	imu_fifo_poll_rate_hz[2]);
 	printf("\n");
 	printf("aux_imu3_enable:                 %d\n",		imu_enable[3]);
 	printf("aux_imu3_spi_bus:                %d\n",		bus[3]);
 	printf("aux_imu3_sample_rate_hz:         %4.1f\n",	imu_sample_rate_hz[3]);
 	printf("aux_imu3_lp_cutoff_freq_hz:      %4.1f\n",	imu_lp_cutoff_freq_hz[3]);
+	printf("aux_imu3_fifo_poll_rate_hz:      %4.1f\n",	imu_fifo_poll_rate_hz[3]);
 	printf("=================================================================\n");
 	return 0;
 }
@@ -90,16 +95,20 @@ int config_file_read(void)
 	cJSON* parent = json_read_file(VOXL_IMU_SERVER_CONF_FILE);
 	if(parent==NULL) return -1;
 
-	// don't read in bus from imu 0 and 1, those are hard-wired in VOXL
+	// don't read in bus from imu 0, this is hard-wired on qrb platforms
 	json_fetch_bool_with_default(	parent, "imu0_enable",				&imu_enable[0],					imu_enable[0]);
 	json_fetch_double_with_default(	parent, "imu0_sample_rate_hz",		&imu_sample_rate_hz[0],			imu_sample_rate_hz[0]);
 	json_fetch_double_with_default(	parent, "imu0_lp_cutoff_freq_hz",	&imu_lp_cutoff_freq_hz[0],		imu_lp_cutoff_freq_hz[0]);
 	json_fetch_bool_with_default(	parent, "imu0_rotate_common_frame",	&imu_rotate_common_frame[0],	imu_rotate_common_frame[0]);
+	json_fetch_double_with_default(	parent, "imu0_fifo_poll_rate_hz",	&imu_fifo_poll_rate_hz[0],		imu_fifo_poll_rate_hz[0]);
 
+	
 	json_fetch_bool_with_default(	parent, "imu1_enable",				&imu_enable[1],					imu_enable[1]);
+	json_fetch_int_with_default(	parent, "imu1_bus",					&bus[1],						bus[1]);
 	json_fetch_double_with_default(	parent, "imu1_sample_rate_hz",		&imu_sample_rate_hz[1],			imu_sample_rate_hz[1]);
 	json_fetch_double_with_default(	parent, "imu1_lp_cutoff_freq_hz",	&imu_lp_cutoff_freq_hz[1],		imu_lp_cutoff_freq_hz[1]);
 	json_fetch_bool_with_default(	parent, "imu1_rotate_common_frame",	&imu_rotate_common_frame[1],	imu_rotate_common_frame[1]);
+	json_fetch_double_with_default(	parent, "imu1_fifo_poll_rate_hz",	&imu_fifo_poll_rate_hz[1],		imu_fifo_poll_rate_hz[1]);
 
 	// read in bus for aux channels since user needs to set those up
 	// don't read in rotate_common_frame since the user's imu could be in any
@@ -108,11 +117,13 @@ int config_file_read(void)
 	json_fetch_int_with_default(	parent, "aux_imu2_spi_bus",				&bus[2],						bus[2]);
 	json_fetch_double_with_default(	parent, "aux_imu2_sample_rate_hz",		&imu_sample_rate_hz[2],			imu_sample_rate_hz[2]);
 	json_fetch_double_with_default(	parent, "aux_imu2_lp_cutoff_freq_hz",	&imu_lp_cutoff_freq_hz[2],		imu_lp_cutoff_freq_hz[2]);
+	json_fetch_double_with_default(	parent, "aux_imu2_fifo_poll_rate_hz",	&imu_fifo_poll_rate_hz[2],		imu_fifo_poll_rate_hz[2]);
 
 	json_fetch_bool_with_default(	parent, "aux_imu3_enable",				&imu_enable[3],					imu_enable[3]);
 	json_fetch_int_with_default(	parent, "aux_imu3_spi_bus",				&bus[3],						bus[3]);
 	json_fetch_double_with_default(	parent, "aux_imu3_sample_rate_hz",		&imu_sample_rate_hz[3],			imu_sample_rate_hz[3]);
 	json_fetch_double_with_default(	parent, "aux_imu3_lp_cutoff_freq_hz",	&imu_lp_cutoff_freq_hz[3],		imu_lp_cutoff_freq_hz[3]);
+	json_fetch_double_with_default(	parent, "aux_imu3_fifo_poll_rate_hz",	&imu_fifo_poll_rate_hz[3],		imu_fifo_poll_rate_hz[3]);
 
 	if(json_get_parse_error_flag()){
 		fprintf(stderr, "failed to parse config file\n");

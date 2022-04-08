@@ -326,7 +326,7 @@ static void* _read_thread_func(void* context)
 		// in basic mode or if delay is enabled in fifo mode, sleep a bit
 		if(en_basic_read) usleep(1000000/imu_sample_rate_hz[id]);
 		else if (delay <= 0){
-			my_loop_sleep(imu_sample_rate_hz[id], &next_time);
+			my_loop_sleep(imu_fifo_poll_rate_hz[id], &next_time);
 		}
 		else usleep(delay);
 	}
