@@ -1,3 +1,5 @@
+0.1.2
+    * fix for imu self test, only enable the 1 onboard imu by default
 0.1.1
     * config file + compiler warn fixes
 0.1.0

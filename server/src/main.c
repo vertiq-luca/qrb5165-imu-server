@@ -417,11 +417,10 @@ int main(int argc, char* argv[])
 			for(i=0;i<N_IMUS;i++) imu_enable[i]=0;
 			imu_enable[self_test_imu] = 1;
 		}
-		// otherwise enable both onboard IMUs along with any AUX imus already
+		// otherwise enable the one onboard IMU along with any AUX imus already
 		// enabled in the config file
 		else{
 			imu_enable[0] = 1;
-			imu_enable[1] = 1;
 		}
 		// test any and all enabled IMUs
 		for(i=0;i<N_IMUS;i++){
