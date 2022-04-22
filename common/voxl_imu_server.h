@@ -66,7 +66,7 @@
 
 // Pipe names and locations. A Modal Pipe client only needs either name or
 // location to connect. Both are here for completeness
-#define VOXL_IMU0_NAME		"imu0"
+#define VOXL_IMU0_NAME		"imu_apps"
 #define VOXL_IMU0_LOCATION	(MODAL_PIPE_DEFAULT_BASE_DIR VOXL_IMU0_NAME "/")
 #define VOXL_IMU1_NAME		"imu1"
 #define VOXL_IMU1_LOCATION	(MODAL_PIPE_DEFAULT_BASE_DIR VOXL_IMU1_NAME "/")
@@ -102,14 +102,6 @@
 #ifndef RAD_TO_DEG
 #define RAD_TO_DEG	(180.0/3.14159265358979323846)
 #endif
-
-
-// DEPRECATED
-#define IMU_CHANNEL0_DIR	(MODAL_PIPE_DEFAULT_BASE_DIR "imu0/")
-#define IMU_CHANNEL1_DIR	(MODAL_PIPE_DEFAULT_BASE_DIR "imu1/")
-#define IMU_CHANNEL2_DIR	(MODAL_PIPE_DEFAULT_BASE_DIR "imu2/")
-#define IMU_CHANNEL3_DIR	(MODAL_PIPE_DEFAULT_BASE_DIR "imu3/")
-#define VOXL_IMU_SERVER_PATHS {IMU_CHANNEL0_DIR, IMU_CHANNEL1_DIR, IMU_CHANNEL2_DIR, IMU_CHANNEL3_DIR}
 
 
 #endif // VOXL_IMU_SERVER_COMMON_H
