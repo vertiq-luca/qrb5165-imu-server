@@ -337,21 +337,10 @@ static void* _read_thread_func(void* context)
 
 int main(int argc, char* argv[])
 {
-	int i, ret;
+	int i;
 
 	// parse opts first
 	if(_parse_opts(argc, argv)) return -1;
-
-
-	// make sure imu_app isn't running
-	ret = system("systemctl status imu_app | grep -q -e \"active (running)\" -e \"; enabled;\"");
-	if(ret==0){
-		fprintf(stderr, "voxl-imu-server and imu_app conflict\n");
-		fprintf(stderr, "stopping and disabling imu_app\n");
-		system("systemctl stop imu_app");
-		system("systemctl disable imu_app");
-		fprintf(stderr,"done disabling imu_app\n");
-	}
 
 ////////////////////////////////////////////////////////////////////////////////
 // parse arguments
