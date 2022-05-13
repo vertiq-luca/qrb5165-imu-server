@@ -1,3 +1,6 @@
+0.2.2
+    * remove unnecessary warning from calibrate tool
+    * calibrate temp tool increase stress threads to 8
 0.2.1
     * remove unnecessary check for old imu_app service
 0.2.0

@@ -286,15 +286,6 @@ int main()
 		fprintf(stderr, "Make sure the voxl-imu-server service is running and try again\n");
 		return -1;
 	}
-	if(en[0] && !en[1]) fprintf(stderr, "\nWARNING: IMU0 is on but IMU1 is off.\n");
-	if(en[1] && !en[0]) fprintf(stderr, "\nWARNING: IMU1 is on but IMU0 is off.\n");
-	if(n_enabled==1){
-		fprintf(stderr, "Press ENTER to continue anyway and only calibrate one IMU\n");
-		fprintf(stderr, "or press Ctrl-C to exit.\n");
-		fprintf(stderr, "To enable both IMUs edit /etc/modalai/voxl-imu-server.conf\n");
-		fprintf(stderr, "and restart the service with systemctl restart voxl-imu-server\n");
-		continue_or_quit();
-	}
 
 	// put voxl-imu-server into calibration mode, only need to send to one pipe
 	for(i=0;i<N_IMUS;i++){

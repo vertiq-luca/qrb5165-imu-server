@@ -95,7 +95,7 @@ static double samples_accl_avg[N_IMUS][N_AUTO_SAMPLES][3];
 static double samples_temp_avg[N_IMUS][N_AUTO_SAMPLES];
 
 // stress thread stuff
-#define N_STRESS_THREADS	4
+#define N_STRESS_THREADS	8
 static int stress_running = 0;
 static pthread_t stress_thread[N_STRESS_THREADS];
 
