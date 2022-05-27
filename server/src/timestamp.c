@@ -54,8 +54,9 @@ int64_t calc_filtered_ts_ns(int64_t time_before_read, int records, double* clock
 
 
 	// otherwise assume what we read from the fifo was there when we went to
-	// read it add 300us for half the fifo_count register read time and subtract half of the odr
-	monotonic = (time_before_read + 300000) - (500000000/odr);
+	// subtract 5.5ms for the register read time and subtract half of the odr
+	// that 5.5ms was tuned based on VIO offset from camera timestamp
+	monotonic = (time_before_read - 5500000) - (500000000/odr);
 
 	// this is our best-guess given only clock_monotonic, but this is noisy!
 	int64_t filtered_ts_ns = monotonic;

@@ -1,3 +1,5 @@
+0.2.3
+    * tune timestamp output based on VIO data
 0.2.2
     * remove unnecessary warning from calibrate tool
     * calibrate temp tool increase stress threads to 8
