@@ -193,7 +193,6 @@ int imu_apply_calibration(int id, imu_data_t* data)
 	for(int i=0;i<3;i++){
 		data->gyro_rad[i] -= gyro_offset[id][i];
 		data->accl_ms2[i] -= accl_offset[id][i];
-		data->accl_ms2[i] /=  accl_scale[id][i];
 	}
 
 	// apply temp cal offset if it exists
@@ -526,18 +525,40 @@ int imu_fifo_read(int id, imu_data_t* data, int* packets)
 	}
 	if(!fifo_running[id]) return 0;
 
+	int ret;
+
 	switch(ic[id]){
 	case IMU_IC_MPU9250:
-		return mpu9250_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		ret = mpu9250_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		break;
 	case IMU_IC_ICM20948:
-		return icm20948_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		ret = icm20948_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		break;
 	case IMU_IC_ICM42688:
-		return icm42688_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		ret = icm42688_fifo_read(bus[id], data, packets, fifo_buffer[id]);
+		break;
 	default:
 		fprintf(stderr, "ERROR: in imu_fifo_read() invalid ic part number\n");
 		fprintf(stderr, "call imu_detect first!\n");
 		return -1;
 	}
+
+	if(ret) return ret;
+
+	/*
+	// debug some scales and offsets to test calibration
+	for(int i=0; i<*packets; i++){
+		float t;
+
+		t = data[i].accl_ms2[0];
+		data[i].accl_ms2[0] = (t * 1.5f) + 0.0f;
+		t = data[i].accl_ms2[1];
+		data[i].accl_ms2[1] = (t * 1.0f) + 5.0f;
+		t = data[i].accl_ms2[2];
+		data[i].accl_ms2[2] = (t * 1.5f) + 5.0f;
+	}
+	*/
+	
 	return 0;
 }
 
