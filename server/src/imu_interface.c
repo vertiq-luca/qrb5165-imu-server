@@ -558,6 +558,22 @@ int imu_fifo_read(int id, imu_data_t* data, int* packets)
 		data[i].accl_ms2[2] = (t * 1.5f) + 5.0f;
 	}
 	*/
+
+/*
+	// debug some scales and offsets to test temp calibration
+	for(int i=0; i<*packets; i++){
+
+		// scaled so x should be about -1 to +1 through the test
+		float x = (data[i].temp_c - 45.0f)/15.0f;
+
+		data[i].gyro_rad[0] = data[i].gyro_rad[0] + (10*x) + (10*x*x);
+		data[i].gyro_rad[1] = data[i].gyro_rad[1] - (10*x) - (10*x*x);
+		data[i].gyro_rad[2] = data[i].gyro_rad[2] + (10*x) - (10*x*x);
+		data[i].accl_ms2[0] = data[i].accl_ms2[0] + (10*x) + (10*x*x);
+		data[i].accl_ms2[1] = data[i].accl_ms2[1] - (10*x) - (10*x*x);
+		data[i].accl_ms2[2] = data[i].accl_ms2[2] + (10*x) - (10*x*x);
+	}
+*/
 	
 	return 0;
 }
