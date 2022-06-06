@@ -87,11 +87,13 @@ int my_loop_sleep(double rate_hz, int64_t* next_time)
 	// try to maintain output data rate
 	*next_time += (1000000000.0/rate_hz);
 
-	// uh oh, we fell behind, warn and get back on track
+	// uh oh, we fell behind, reset
 	if(*next_time<=current_time){
-		return -1;
+		*next_time = current_time + (1000000000.0/rate_hz);
+		return 0;
 	}
 
+	// normal operation
 	my_nanosleep(*next_time-current_time);
 	return 0;
 }

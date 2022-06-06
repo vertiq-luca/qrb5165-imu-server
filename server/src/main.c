@@ -320,7 +320,10 @@ static void* _read_thread_func(void* context)
 
 		// send to pipe
 		if(packets_read>0){
+			//int64_t t1 = my_time_monotonic_ns();
 			pipe_server_write(id, (char*)data, packets_read*sizeof(imu_data_t));
+			//int64_t t2 = my_time_monotonic_ns();
+			//fprintf(stderr, "pipe write took %0.2fms\n", (t2-t1)/1000000.0);
 		}
 
 		// in basic mode or if delay is enabled in fifo mode, sleep a bit

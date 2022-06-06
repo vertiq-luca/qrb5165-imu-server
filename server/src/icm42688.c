@@ -369,7 +369,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 	#ifdef HIRES_FIFO
 		const int p_len = 20;
 		const int p_warn = 93;
-		const int p_max = 101;
+		const int p_max = 103;
 		const uint8_t correct_header = 120;
 	#else
 		const int p_len = 16;
@@ -411,17 +411,20 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		return 0;
 	}
 
-	// fifo can actually hold p_max but if we are reading >=p_warn then
-	// something has gone wrong or CPU is stalled
-	if(en_print_fifo_count && records>=p_warn && records<(p_max-1)){
-		fprintf(stderr, "WARNING FIFO ALMOST FULL\n");
-	}
-	// fifo rarely reports p_max even when full but p_max-1 shows up frequently
-	if(records>=(p_max-1)){
+
+	// fifo rarely reports p_max even when full but p_max-2 shows up frequently
+	// This is because there is space after the fifo for 2 extra packets that are
+	// sometimes used, sometimes not. Section 6.3 of the datasheet explains this
+	if(records>=(p_max-2)){
 		if(en_print_fifo_count){
 			fprintf(stderr, "WARNING FIFO COMPLETELY FULL\n");
 		}
 		last_read_was_good[bus]=0; // assume packets were lost since the last read
+	}
+	// fifo can actually hold p_max but if we are reading >=p_warn then
+	// something has gone wrong or CPU is stalled
+	else if(en_print_fifo_count && records>=p_warn){
+		fprintf(stderr, "WARNING FIFO ALMOST FULL\n");
 	}
 
 
