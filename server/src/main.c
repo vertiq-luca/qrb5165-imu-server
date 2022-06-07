@@ -38,6 +38,8 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h> // for atoi(), exit(), and system()
+#include <sched.h>
+#include <errno.h>
 
 #include <modal_start_stop.h>
 #include <modal_pipe_server.h>
@@ -311,7 +313,7 @@ static void* _read_thread_func(void* context)
 
 		// optional debug prints
 		if(en_print_fifo_count){
-			printf("read %d packets from imu%d\n", packets_read, id);
+			printf("read %3d packets from imu%d\n", packets_read, id);
 		}
 		if(en_print_data && packets_read>0){
 			// only print last packet or it's too much
@@ -395,6 +397,24 @@ int main(int argc, char* argv[])
 	// we can be fairly confident there is no PID file already and we can
 	// make our own safely.
 	make_pid_file(PROCESS_NAME);
+
+
+////////////////////////////////////////////////////////////////////////////////
+// set this critical process to use FIFO scheduler with medium priority
+////////////////////////////////////////////////////////////////////////////////
+
+	struct sched_param param;
+	memset(&param, 0, sizeof(param));
+	param.sched_priority = 50;
+	int ret = sched_setscheduler(0, SCHED_FIFO, &param);
+	if(ret==-1){
+		fprintf(stderr, "WARNING Failed to set priority, errno = %d\n", errno);
+	}
+	// check
+	ret = sched_getscheduler(0);
+	if(ret!=SCHED_FIFO){
+		fprintf(stderr, "WARNING: failed to set scheduler\n");
+	}
 
 
 ////////////////////////////////////////////////////////////////////////////////
