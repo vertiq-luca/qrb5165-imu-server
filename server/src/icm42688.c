@@ -132,7 +132,8 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 
 	// for icm42688, cutoff frequency varies based on sample rate
 	// round to nearest available BW setting
-	if     (lp_cutoff_freq_hz >= sample_rate_hz/3)   UI_FILT_BW = 0; // nominally sample_rate/2
+	if     (lp_cutoff_freq_hz >= sample_rate_hz/1.5) UI_FILT_BW = 15;// filter off
+	else if(lp_cutoff_freq_hz >= sample_rate_hz/3)   UI_FILT_BW = 0; // nominally sample_rate/2
 	else if(lp_cutoff_freq_hz >= sample_rate_hz/4.5) UI_FILT_BW = 1; // nominally sample_rate/4
 	else if(lp_cutoff_freq_hz >= sample_rate_hz/6.5) UI_FILT_BW = 2; // nominally sample_rate/5
 	else if(lp_cutoff_freq_hz >= sample_rate_hz/9)   UI_FILT_BW = 3; // nominally sample_rate/8
@@ -165,30 +166,36 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 	val = 0x04; // set pin 9 function to CLKIN
 	voxl_spi_write_reg_byte(bus, ICM42688_UB1_REG_INTF_CONFIG5, val);
 
-	// finally jump to back 0 to finish setup
-	if(__switch_to_bank(bus, 0)) return -1;
-
 	#endif
 
-	// turn on temp, accel and gyro in low noise mode, requires >200us wait after
-	val = TEMP_EN | GYRO_MODE_LOW_NOISE | ACCEL_MODE_LOW_NOISE;
-	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_PWR_MGMT0, val);
-	usleep(1000);
+
 
 	////////////////////////////////////////////////////////////////////////////
 	// now bank 1
 	////////////////////////////////////////////////////////////////////////////
 	if(__switch_to_bank(bus, 1)) return -1;
 
-	// disable notch filter, leave AA filter on
-	val = 0xA0 | 1; // reset value plus 1 to disable notch
+	// AA filter and notch filter are on by default
+	val = 0xA0; // AAF ON, Notch ON
+	//val = 0xA1; // AAF ON, Notch OFF
 	voxl_spi_write_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC2, val);
 
-	// configure anti alias filter for 213hz 3gb bandwidth which is just below
-	// our nyquist frequency of 250hz for a 500hz sample rate
-	static const uint8_t  AAF_DELT		= 5;
-	static const uint16_t AAF_DELTSQR	= 25;
-	static const uint8_t  AAF_BITSHIFT	= 10;
+
+	// // 42hz strongest possible for testing only
+	// static const uint8_t  AAF_DELT		= 1;
+	// static const uint16_t AAF_DELTSQR	= 1;
+	// static const uint8_t  AAF_BITSHIFT	= 15;
+
+	// 126hz AAF
+	// this is what we actually use for 1khz sample rate
+	static const uint8_t  AAF_DELT		= 3;
+	static const uint16_t AAF_DELTSQR	= 9;
+	static const uint8_t  AAF_BITSHIFT	= 12;
+
+	// // 213hz old value, for testing now
+	// static const uint8_t  AAF_DELT		= 5;
+	// static const uint16_t AAF_DELTSQR	= 25;
+	// static const uint8_t  AAF_BITSHIFT	= 10;
 
 	// write these AA filter settings to gyro in bank 1
 	val = AAF_DELT;
@@ -202,7 +209,7 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 	////////////////////////////////////////////////////////////////////////////
 	// now bank 2
 	////////////////////////////////////////////////////////////////////////////
-	if(__switch_to_bank(bus, 0)) return -1;
+	if(__switch_to_bank(bus, 2)) return -1;
 
 	// write same AA filter params to Accel. Note the 3 values above are the same
 	// but the registers are constructed differently.
@@ -255,6 +262,26 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 		val |= FIFO_HIRES_EN;
 	#endif
 	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_FIFO_CONFIG1, val);
+
+	// LAST thing is to finally turn on the sensors AFTER all the registers have been configured
+	// turn on temp, accel and gyro in low noise mode, requires >200us wait after
+	val = TEMP_EN | GYRO_MODE_LOW_NOISE | ACCEL_MODE_LOW_NOISE;
+	voxl_spi_write_reg_byte(bus, ICM42688_UB0_REG_PWR_MGMT0, val);
+
+	/*
+	// read out notch filter register values for R&D only
+	if(__switch_to_bank(bus, 1)) return -1;
+	voxl_spi_read_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC6, &val);
+	printf("X: %d\n", val);
+	voxl_spi_read_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC7, &val);
+	printf("Y: %d\n", val);
+	voxl_spi_read_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC8, &val);
+	printf("Z: %d\n", val);
+	voxl_spi_read_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC9, &val);
+	printf("%x\n", val);
+	voxl_spi_read_reg_byte(bus, ICM42688_UB1_REG_GYRO_CONFIG_STATIC10, &val);
+	printf("%x\n", val);
+	*/
 
 	// wait for imu to wakeup, otherwise we get -32768 out of the data regs
 	usleep(100000);

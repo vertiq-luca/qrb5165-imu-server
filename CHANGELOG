@@ -1,7 +1,11 @@
+0.4.0
+    * enable AAF for Accel
+    * enable notch for Gyro
+    * lower AAF cutoff for gyro
 0.3.1
     * move to RT FIFO scheduler
 0.3.0
-    * improve behavior is 42688 FIFO overflows
+    * improve behavior if 42688 FIFO overflows
 0.2.4
     * fix accel calibration scale
 0.2.3
