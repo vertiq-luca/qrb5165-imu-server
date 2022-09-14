@@ -38,10 +38,10 @@
 #include <math.h>
 
 #include <voxl_io.h>
+#include <rc_math/timestamp_filter.h>
 #include "icm42688.h"
 #include "icm42688_defs.h"
 #include "global_debug_flags.h"
-#include "timestamp.h"
 
 // enable hires fifo
 #define HIRES_FIFO
@@ -61,10 +61,8 @@ static double configured_odr_hz[16];
 // ratio of imu clock speed to apps proc
 // imu runs faster than requested due to 32.768khz clock instead of 32khz, start with this known correction factor, this value is estimated in realtime
 #define STARTING_CLOCK_RATIO	0.9765625
-static double clock_ratio[16];
-// keep track of timestamp so we can pick up next read
-static int last_read_was_good[16];
-static int64_t last_ts_ns[16];
+static rc_ts_filter_t f[16];
+
 
 #define SPI_SPEED_BASE 1000000  // 1mbit, that's as slow as DSPAL will let us go
 #define SPI_SPEED_DATA 5000000  // limit is 10mbit, go at half that
@@ -108,9 +106,6 @@ int icm42688_detect(int bus)
 int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 {
 	uint8_t val, ODR, UI_FILT_BW;
-
-	// make sure adaptive clock rate starts initialized
-	if(clock_ratio[bus]==0.0) clock_ratio[bus] = STARTING_CLOCK_RATIO;
 
 	// check sample rate option, pick nearest rate
 	if     (sample_rate_hz>=24000){	ODR=1;	configured_odr_hz[bus]=32000;}
@@ -285,6 +280,10 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 
 	// wait for imu to wakeup, otherwise we get -32768 out of the data regs
 	usleep(100000);
+
+	// set up the timestamp filter
+	rc_ts_filter_init(&f[bus], configured_odr_hz[bus]/STARTING_CLOCK_RATIO);
+	f[bus].en_debug_prints = 1;
 	return 0;
 }
 
@@ -416,7 +415,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 				ICM42688_UB0_REG_FIFO_DATA, p_len, &records, \
 				fifo_buffer, p_max*p_len, SPI_SPEED_BASE, SPI_SPEED_DATA);
 	if(ret){
-		last_read_was_good[bus]=0;
+		rc_ts_filter_report_bad_read(&f[bus]);
 		fprintf(stderr, "ERROR icm42688_fifo_read: reader found an issue\n");
 		// maybe should reset fifo here? not sure, never hit this case
 		// 20948 definitely needs to reset fifo here because 20948 will put
@@ -446,7 +445,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		if(en_print_fifo_count){
 			fprintf(stderr, "WARNING FIFO COMPLETELY FULL\n");
 		}
-		last_read_was_good[bus]=0; // assume packets were lost since the last read
+		rc_ts_filter_report_bad_read(&f[bus]);
 	}
 	// fifo can actually hold p_max but if we are reading >=p_warn then
 	// something has gone wrong or CPU is stalled
@@ -456,23 +455,8 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 
 
 	// calculate the best-guess filtered timestamp
-	int64_t filtered_ts_ns = calc_filtered_ts_ns(time_before_read, records, &clock_ratio[bus],\
-							last_ts_ns[bus], configured_odr_hz[bus], last_read_was_good[bus]);
-
-	// find the timestep based on either the last fifo sample (smooth) or
-	// based on the sample rate (jumpy)
-	int64_t new_dt;
-	if(last_read_was_good[bus]){
-		new_dt = (filtered_ts_ns - last_ts_ns[bus])/records;
-	}
-	else{
-		new_dt = 1000000000.0/(configured_odr_hz[bus]/clock_ratio[bus]);
-	}
-
-	// done using this flag now, set it for the next loop
-	// it may go back to 0 later if there was a parsing problem
-	last_read_was_good[bus] = 1;
-	last_ts_ns[bus] = filtered_ts_ns;
+	int64_t filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], time_before_read, records);
+	int64_t new_dt_ns = f[bus].estimated_dt * 1000000000;
 
 	// now loop through and decode each packet
 	for(int i=0;i<records;i++){
@@ -480,7 +464,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 
 		// check packet header indicating all data is present
 		if(base[0]==0 || base[0]==255){
-			last_read_was_good[bus]=0;
+			rc_ts_filter_report_bad_read(&f[bus]);
 			fprintf(stderr, "ERROR in icm42688_read_fifo, bad read, header == %d\n", base[0]);
 			fprintf(stderr, "resetting fifo\n");
 			icm42688_fifo_reset(bus);
@@ -546,7 +530,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		//data[i].timestamp_ns = ((uint64_t)ts*1000*32)/30;
 
 		// place timestamp based on our previous filtering
-		data[i].timestamp_ns = filtered_ts_ns - ((records-i-1)*new_dt);
+		data[i].timestamp_ns = filtered_ts_ns - ((records-i-1)*new_dt_ns);
 	}
 	n_empty_reads = 0;
 	*packets = records;
