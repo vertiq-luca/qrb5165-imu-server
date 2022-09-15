@@ -60,6 +60,7 @@ static double configured_odr_hz[16];
 
 // ratio of imu clock speed to apps proc
 // imu runs faster than requested due to 32.768khz clock instead of 32khz, start with this known correction factor, this value is estimated in realtime
+#define READ_DELAY_NS			6300000 // tuned so qvio reports 0 timeshift
 #define STARTING_CLOCK_RATIO	0.9765625
 static rc_ts_filter_t f[16];
 
@@ -283,7 +284,9 @@ int icm42688_init(int bus, double sample_rate_hz, int lp_cutoff_freq_hz)
 
 	// set up the timestamp filter
 	rc_ts_filter_init(&f[bus], configured_odr_hz[bus]/STARTING_CLOCK_RATIO);
-	f[bus].en_debug_prints = 1;
+	if(en_print_timesync){
+		f[bus].en_debug_prints = 1;
+	}
 	return 0;
 }
 
@@ -455,7 +458,8 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 
 
 	// calculate the best-guess filtered timestamp
-	int64_t filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], time_before_read, records);
+	int64_t ts_estimate = (time_before_read - READ_DELAY_NS) - (500000000/configured_odr_hz[bus]);
+	int64_t filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], ts_estimate, records);
 	int64_t new_dt_ns = f[bus].estimated_dt * 1000000000;
 
 	// now loop through and decode each packet

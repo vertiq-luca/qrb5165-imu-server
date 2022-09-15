@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020 ModalAI, Inc.
+# Copyright (c) 2022 ModalAI, Inc.
 #
 
 [Unit]
@@ -10,8 +10,7 @@ SourcePath=/usr/bin/voxl-imu-server
 User=root
 Type=simple
 PIDFile=/run/voxl-imu-server.pid
-Restart=on-failure
-ExecStart=/bin/bash -c "/usr/bin/voxl-imu-server"
+ExecStart=/usr/bin/voxl-imu-server
 
 [Install]
 WantedBy=multi-user.target
