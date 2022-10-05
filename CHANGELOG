@@ -1,3 +1,5 @@
+0.4.2
+    * add sleep to systemd service file
 0.4.1
     * move to new rc_math timestamp filter for 42688p
 0.4.0
