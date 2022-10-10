@@ -35,6 +35,10 @@
 #ifndef CAL_FILE_H
 #define CAL_FILE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "voxl_imu_server.h"
 
 // available commnds for client to send to server over command pipe
@@ -93,6 +97,8 @@ int cal_file_write(void);
 
 
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif // end #define CAL_FILE_H

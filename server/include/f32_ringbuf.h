@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2020 ModalAI Inc.
+ * Copyright 2022 ModalAI Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,45 +31,35 @@
  * POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
 
-
-#ifndef CONFIG_FILE_H
-#define CONFIG_FILE_H
+#ifndef F32_RINGBUF_H
+#define F32_RINGBUF_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <voxl_imu_server.h>
+
+typedef struct f32_ringbuf_t {
+    float* d;      ///< pointer to dynamically allocated data
+    int size;       ///< number of elements the buffer can hold
+    int index;      ///< index of the most recently added value
+    int initialized;///< flag indicating if memory has been allocated for the buffer
+} f32_ringbuf_t;
+
+#define F32_RINGBUF_INITIALIZER {\
+    .d = NULL,\
+    .size = 0,\
+    .index = 0,\
+    .initialized = 0}
 
 
-////////////////////////////////////////////////////////////////////////////////
-// declare all config file fields here. define them in config_file.c
-////////////////////////////////////////////////////////////////////////////////
-extern int imu_enable[N_IMUS];
-extern int bus[N_IMUS];
-extern double imu_sample_rate_hz[N_IMUS];
-extern double imu_lp_cutoff_freq_hz[N_IMUS];
-extern int imu_rotate_common_frame[N_IMUS];
-extern double imu_fifo_poll_rate_hz[N_IMUS];
-
-/**
- * load the config file and populate the above extern variables
- *
- * @return     0 on success, -1 on failure
- */
-int config_file_read(void);
-
-
-/**
- * @brief      prints the current configuration values to the screen
- *
- *             this includes all of the extern variables listed above. If this
- *             is called before config_file_load then it will print the default
- *             values.
- *
- * @return     0 on success, -1 on failure
- */
-int config_file_print(void);
+f32_ringbuf_t f32_ringbuf_empty(void);
+int   f32_ringbuf_alloc(f32_ringbuf_t* buf, int size);
+int   f32_ringbuf_free(f32_ringbuf_t* buf);
+int   f32_ringbuf_reset(f32_ringbuf_t* buf);
+int   f32_ringbuf_insert(f32_ringbuf_t* buf, float val);
+float f32_ringbuf_get_value(f32_ringbuf_t* buf, int position);
+int   f32_ringbuf_copy_out_n_newest(f32_ringbuf_t* buf, int n, float* out);
 
 
 #ifdef __cplusplus
@@ -77,4 +67,4 @@ int config_file_print(void);
 #endif
 
 
-#endif // end #define CONFIG_FILE_H
+#endif // F32_RINGBUF_H

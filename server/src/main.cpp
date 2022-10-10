@@ -485,11 +485,13 @@ int main(int argc, char* argv[])
 
 		// create the pipe
 		pipe_info_t info = { \
-			.name        = "",\
-			.location    = "",\
-			.type        = "imu_data_t",\
-			.server_name = PROCESS_NAME,\
-			.size_bytes  = IMU_RECOMMENDED_PIPE_SIZE};
+			"",\
+			"",\
+			"imu_data_t",\
+			PROCESS_NAME,\
+			IMU_RECOMMENDED_PIPE_SIZE,\
+			0};
+
 		strcpy(info.name, names[i]);
 		strcpy(info.location, locations[i]);
 

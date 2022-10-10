@@ -34,6 +34,10 @@
 #ifndef IMU_INTERFACE_H
 #define IMU_INTERFACE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <voxl_imu_server.h>
 
 
@@ -89,5 +93,10 @@ int imu_fifo_stop(int id);
 int imu_is_fifo_running(int id);
 int imu_fifo_read(int id, imu_data_t* data, int* packets);
 int imu_self_test(int id, imu_self_test_result_t* result);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // IMU_INTERFACE_H

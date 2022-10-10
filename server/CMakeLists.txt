@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.3)
 
 set(SERVERNAME voxl-imu-server)
-file(GLOB all_src_files "src/*.c")
+file(GLOB all_src_files "src/*.c" "src/*.cpp")
 add_executable(${SERVERNAME} ${all_src_files} ../common/cal_file.c)
 include_directories(
 	include
