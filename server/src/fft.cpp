@@ -272,7 +272,7 @@ int main()
 */
 
 
-int fft_buffer_init(fft_buffer_t* buf, int size)
+int fft_buffer_init(fft_buffer_t* buf, int size, float sample_rate_hz)
 {
 	if(buf->initialized){
 		fprintf(stderr, "ERROR in %s, buffer already initialized\n", __FUNCTION__);
@@ -298,6 +298,7 @@ int fft_buffer_init(fft_buffer_t* buf, int size)
 
 	buf->size = size;
 	buf->n = 0;
+	buf->sample_rate_hz = sample_rate_hz;
 	buf->initialized = 1;
 	return 0;
 }
@@ -322,32 +323,26 @@ int fft_buffer_free(fft_buffer_t* buf)
 }
 
 
-int fft_buffer_lock(fft_buffer_t* buf)
-{
-	pthread_mutex_lock(&buf->mtx);
-	return 0;
-}
-
-int fft_buffer_unlock(fft_buffer_t* buf)
-{
-	pthread_mutex_unlock(&buf->mtx);
-	return 0;
-}
 
 
-
-int fft_buffer_add(fft_buffer_t* buf, imu_data_t* data)
+int fft_buffer_add(fft_buffer_t* buf, imu_data_t* data, int n)
 {
 	if(!buf->initialized){
 		fprintf(stderr, "ERROR in %s, fft_buffer not initialized\n", __FUNCTION__);
 		return -1;
 	}
 
-	for(int i=0; i<3; i++){
-		f32_ringbuf_insert(&buf->buf[i],   (float)data->gyro_rad[i]);
-		f32_ringbuf_insert(&buf->buf[3+i], (float)data->accl_ms2[i]);
+	pthread_mutex_lock(&buf->mtx);
+
+	for(int j=0; j<n; j++){
+		for(int i=0; i<3; i++){
+			f32_ringbuf_insert(&buf->buf[i],   (float)data[j].gyro_rad[i]);
+			f32_ringbuf_insert(&buf->buf[3+i], (float)data[j].accl_ms2[i]);
+		}
+		if(buf->n < buf->size) buf->n++;
 	}
-	if(buf->n < buf->size) buf->n++;
+	pthread_mutex_unlock(&buf->mtx);
+	return 0;
 }
 
 
@@ -372,12 +367,12 @@ int fft_buffer_calc(fft_buffer_t* buf, int n, imu_fft_data_t* out)
 
 	// lock and copy out data to temp buffers so that the data is in order
 	// and so that the driver can add more data while we calc the fft
-	fft_buffer_lock(buf);
+	pthread_mutex_lock(&buf->mtx);
 	int i;
 	for(i=0;i<6;i++){
 		f32_ringbuf_copy_out_n_newest(&buf->buf[i], n, buf->tmp[i]);
 	}
-	fft_buffer_unlock(buf);
+	pthread_mutex_unlock(&buf->mtx);
 
 	// now actually calc the results
 	for(i=0;i<6;i++){

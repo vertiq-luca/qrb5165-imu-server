@@ -65,6 +65,7 @@ typedef struct imu_fft_data_t{
  * read.
  */
 #define IMU_FFT_RECOMMENDED_READ_BUF_SIZE   (sizeof(imu_fft_data_t) * 5)
+#define IMU_FFT_RECOMMENDED_PIPE_SIZE       (128*1024)
 
 
 
@@ -81,13 +82,11 @@ typedef struct fft_buffer_t{
 } fft_buffer_t;
 
 
-int fft_buffer_init(fft_buffer_t* buf);
+int fft_buffer_init(fft_buffer_t* buf, int size, float sample_rate_hz);
 int fft_buffer_free(fft_buffer_t* buf);
 
-// Lock before adding data so calc can run in a separate thread
-int fft_buffer_lock(fft_buffer_t* buf);
-int fft_buffer_add(fft_buffer_t* buf, imu_data_t* data);
-int fft_buffer_unlock(fft_buffer_t* buf);
+int fft_buffer_add(fft_buffer_t* buf, imu_data_t* data, int n);
+
 
 // this will also lock the buffer mutex, but only for the short time that
 // is necessary

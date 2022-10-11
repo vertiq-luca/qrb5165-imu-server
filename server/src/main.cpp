@@ -48,6 +48,7 @@
 #include "cal_file.h"
 #include "imu_interface.h"
 #include "misc.h"
+#include "fft.h"
 
 #define PROCESS_NAME "voxl-imu-server" // for PID file name
 
@@ -70,6 +71,8 @@ static int delay = 0;
 static int force_common_frame_off = 0; // turn common frame off for calibration
 static int force_imu[N_IMUS]; // debug tool set by args to force an IMU on
 static pthread_t read_thread[N_IMUS];
+static pthread_t fft_thread[N_IMUS];
+static fft_buffer_t fft_buf[N_IMUS];
 
 
 // printed if some invalid argument was given
@@ -256,7 +259,10 @@ static int _parse_opts(int argc, char* argv[])
 
 static void _quit(int ret)
 {
-	for(int i=0;i<N_IMUS;i++) imu_close(i);
+	for(int i=0;i<N_IMUS;i++){
+		imu_close(i);
+		fft_buffer_free(&fft_buf[i])
+	}
 	pipe_server_close_all();
 	remove_pid_file(PROCESS_NAME);
 	if(ret==0) printf("Exiting Cleanly\n");
@@ -328,12 +334,44 @@ static void* _read_thread_func(void* context)
 			//fprintf(stderr, "pipe write took %0.2fms\n", (t2-t1)/1000000.0);
 		}
 
+		// AFTER sending out critical data, add to the fft buffer which may
+		// block waiting to lock a mutex
+		if(fft_buf[i].initialized){
+			fft_buffer_add(&fft_buf[id], data, packets_read);
+		}
+
 		// in basic mode or if delay is enabled in fifo mode, sleep a bit
 		if(en_basic_read) usleep(1000000/imu_sample_rate_hz[id]);
 		else if (delay <= 0){
 			my_loop_sleep(imu_fifo_poll_rate_hz[id], &next_time);
 		}
 		else usleep(delay);
+	}
+
+	return NULL;
+}
+
+static void* _fft_thread_func(void* context)
+{
+	static int64_t next_time = 0;
+	int id = (intptr_t)context;
+	// sanity check
+	if(id<0 || id>MAX_IMU) return NULL;
+
+	if(!fft_buf[id].initialized){
+		fprintf(stderr, "WARNING, not running fft thread for imu%d since buffer failed to initialize\n", id);
+		return NULL;
+	}
+
+	// run until the global main_running flag becomes 0
+	while(main_running){
+		imu_fft_data_t data;
+		if(pipe_server_get_num_clients(N_IMUS+id)>0){
+			if(!fft_buffer_calc(&fft_buf[id], MAX_FFT_BUF_LEN, &data)){
+				pipe_server_write(N_IMUS+id, &data, sizeof(imu_fft_data_t));
+			}
+		}
+		my_loop_sleep(2.0, &next_time);
 	}
 
 	return NULL;
@@ -456,7 +494,15 @@ int main(int argc, char* argv[])
 // start the imu and pipes if enabled
 ////////////////////////////////////////////////////////////////////////////////
 	if(imu_detect_board()){
-		_quit(-1);
+		fprintf(stderr, "WARNING, failed to detect imu_apps, trying again\n");
+		usleep(1000000);
+		if(imu_detect_board()){
+			fprintf(stderr, "ERROR, failed to detect imu_apps on second try\n");
+			_quit(-1);
+		}
+		else{
+			printf("INFO: succeeded to detect imu_apps on second try\n");
+		}
 	}
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -483,7 +529,7 @@ int main(int argc, char* argv[])
 		char* names[N_IMUS]		= VOXL_IMU_NAME_ARRAY;
 		char* locations[N_IMUS]	= VOXL_IMU_LOCATION_ARRAY;
 
-		// create the pipe
+		// create the imu data pipe
 		pipe_info_t info = { \
 			"",\
 			"",\
@@ -506,6 +552,35 @@ int main(int argc, char* argv[])
 			continue;
 		}
 		pipe_server_set_available_control_commands(i, CONTROL_COMMANDS);
+
+		// create the fft pipe and buffer
+		pipe_info_t info2 = { \
+			"",\
+			"",\
+			"imu_fft_data_t",\
+			PROCESS_NAME,\
+			IMU_FFT_RECOMMENDED_PIPE_SIZE,\
+			0};
+
+		strcpy(info2.name, names[i]);
+		strcat(info2.name, "_fft");
+		strcpy(info2.location, locations[i]);
+		strcat(info2.location, "_fft");
+
+		pipe_server_set_connect_cb(i, _connect_handler, NULL);
+		pipe_server_set_disconnect_cb(i, _disconnect_handler, NULL);
+
+		if(pipe_server_create(N_IMUS+i, info2, 0)){
+			fprintf(stderr, "WARNING: failed to create FFT pipe for IMU %d\n", i);
+			continue;
+		}
+
+		// TODO fetch the real ODR from the timestamp filter while running
+		// for now this works for VOXL2
+		if(fft_buffer_init(&fft_buf[i], MAX_FFT_BUF_LEN, imu_sample_rate_hz[i]/0.9765625)){
+			continue;
+		}
+
 
 		success=1; // flag that at least one IMU succeeded
 	}
@@ -537,7 +612,10 @@ int main(int argc, char* argv[])
 	pthread_attr_t tattr;
 	pthread_attr_init(&tattr);
 	for(i=0;i<N_IMUS;i++){
-		if(imu_enable[i]) pthread_create(&read_thread[i], &tattr, _read_thread_func, (void*)i);
+		if(imu_enable[i]){
+			pthread_create(&read_thread[i], &tattr, _read_thread_func, (void*)i);
+			pthread_create(&fft_thread[i], &tattr, _fft_thread_func, (void*)i);
+		}
 	}
 
 	// run until start/stop module catches a signal and changes main_running to 0
@@ -550,8 +628,10 @@ int main(int argc, char* argv[])
 
 	for(i=0;i<N_IMUS;i++){
 		if(imu_enable[i]){
-			printf("joining thread %d\n", i);
+			printf("joining read thread %d\n", i);
 			pthread_join(read_thread[i], NULL);
+			printf("joining fft thread %d\n", i);
+			pthread_join(fft_thread[i], NULL);
 		}
 	}
 	_quit(0);
