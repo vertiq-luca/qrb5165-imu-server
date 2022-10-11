@@ -261,7 +261,7 @@ static void _quit(int ret)
 {
 	for(int i=0;i<N_IMUS;i++){
 		imu_close(i);
-		fft_buffer_free(&fft_buf[i])
+		fft_buffer_free(&fft_buf[i]);
 	}
 	pipe_server_close_all();
 	remove_pid_file(PROCESS_NAME);
@@ -336,7 +336,7 @@ static void* _read_thread_func(void* context)
 
 		// AFTER sending out critical data, add to the fft buffer which may
 		// block waiting to lock a mutex
-		if(fft_buf[i].initialized){
+		if(fft_buf[id].initialized){
 			fft_buffer_add(&fft_buf[id], data, packets_read);
 		}
 
@@ -367,9 +367,12 @@ static void* _fft_thread_func(void* context)
 	while(main_running){
 		imu_fft_data_t data;
 		if(pipe_server_get_num_clients(N_IMUS+id)>0){
+			//int64_t t1 = my_time_monotonic_ns();
 			if(!fft_buffer_calc(&fft_buf[id], MAX_FFT_BUF_LEN, &data)){
 				pipe_server_write(N_IMUS+id, &data, sizeof(imu_fft_data_t));
 			}
+			//int64_t t2 = my_time_monotonic_ns();
+			//fprintf(stderr, "fft calc took %0.2fms\n", (t2-t1)/1000000.0);
 		}
 		my_loop_sleep(2.0, &next_time);
 	}
@@ -564,8 +567,6 @@ int main(int argc, char* argv[])
 
 		strcpy(info2.name, names[i]);
 		strcat(info2.name, "_fft");
-		strcpy(info2.location, locations[i]);
-		strcat(info2.location, "_fft");
 
 		pipe_server_set_connect_cb(i, _connect_handler, NULL);
 		pipe_server_set_disconnect_cb(i, _disconnect_handler, NULL);

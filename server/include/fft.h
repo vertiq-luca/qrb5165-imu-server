@@ -42,7 +42,7 @@
 #define MAX_FFT_FREQ_BINS ((MAX_FFT_BUF_LEN/2)+1)
 
 typedef struct imu_fft_data_t{
-    uint32_t magic_number; ///< Set to IMU_IMAGE_MAGIC_NUMBER for frame syncing
+    uint32_t magic_number; ///< Set to IMU_FFT_MAGIC_NUMBER
     int n_freq;
     float max_freq_hz; // min frequency should always be 0
 
