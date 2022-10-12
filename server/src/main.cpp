@@ -356,7 +356,8 @@ static void* _fft_thread_func(void* context)
 {
 	static int64_t next_time = 0;
 	int id = (intptr_t)context;
-	const int n = MAX_FFT_BUF_LEN;
+	//const int n = MAX_FFT_BUF_LEN;
+	const int n = 256;
 
 	// sanity check
 	if(id<0 || id>MAX_IMU) return NULL;
@@ -368,7 +369,7 @@ static void* _fft_thread_func(void* context)
 
 	// run until the global main_running flag becomes 0
 	while(main_running){
-		my_loop_sleep(4.0, &next_time);
+		my_loop_sleep(10.0, &next_time);
 
 		if(pipe_server_get_num_clients(N_IMUS+id)<=0) continue;
 		if(fft_buf[id].n<n) continue; // waiting for data still
@@ -377,7 +378,6 @@ static void* _fft_thread_func(void* context)
 
 		//int64_t t1 = my_time_monotonic_ns();
 		if(fft_buffer_calc(&fft_buf[id], n, &data)) continue;
-
 		pipe_server_write(N_IMUS+id, &data, sizeof(imu_fft_data_t));
 
 		//int64_t t2 = my_time_monotonic_ns();
