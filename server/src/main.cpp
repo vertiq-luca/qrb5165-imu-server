@@ -133,13 +133,14 @@ static void _control_pipe_handler(int ch, char* string, int bytes, __attribute__
 static void _connect_handler(int ch, int client_id, char* client_name, __attribute__((unused)) void* context)
 {
 	// sanity check
-	if(ch<0 || ch>MAX_IMU) return;
+	int i = ch%N_IMUS;
+	if(i<0 || i>MAX_IMU) return;
 
 	printf("client id %d connected to channed %d, name: %s\n",client_id, ch, client_name);
 	// The main purpose of this callback is to start the FIFO
 	// no need to do that in basic read mode
 	if(!en_basic_read){
-		imu_fifo_start(ch);
+		imu_fifo_start(i);
 	}
 	return;
 }
@@ -355,6 +356,8 @@ static void* _fft_thread_func(void* context)
 {
 	static int64_t next_time = 0;
 	int id = (intptr_t)context;
+	const int n = MAX_FFT_BUF_LEN;
+
 	// sanity check
 	if(id<0 || id>MAX_IMU) return NULL;
 
@@ -365,16 +368,20 @@ static void* _fft_thread_func(void* context)
 
 	// run until the global main_running flag becomes 0
 	while(main_running){
+		my_loop_sleep(4.0, &next_time);
+
+		if(pipe_server_get_num_clients(N_IMUS+id)<=0) continue;
+		if(fft_buf[id].n<n) continue; // waiting for data still
+
 		imu_fft_data_t data;
-		if(pipe_server_get_num_clients(N_IMUS+id)>0){
-			//int64_t t1 = my_time_monotonic_ns();
-			if(!fft_buffer_calc(&fft_buf[id], MAX_FFT_BUF_LEN, &data)){
-				pipe_server_write(N_IMUS+id, &data, sizeof(imu_fft_data_t));
-			}
-			//int64_t t2 = my_time_monotonic_ns();
-			//fprintf(stderr, "fft calc took %0.2fms\n", (t2-t1)/1000000.0);
-		}
-		my_loop_sleep(2.0, &next_time);
+
+		//int64_t t1 = my_time_monotonic_ns();
+		if(fft_buffer_calc(&fft_buf[id], n, &data)) continue;
+
+		pipe_server_write(N_IMUS+id, &data, sizeof(imu_fft_data_t));
+
+		//int64_t t2 = my_time_monotonic_ns();
+		//fprintf(stderr, "fft calc took %0.2fms\n", (t2-t1)/1000000.0);
 	}
 
 	return NULL;
@@ -568,8 +575,8 @@ int main(int argc, char* argv[])
 		strcpy(info2.name, names[i]);
 		strcat(info2.name, "_fft");
 
-		pipe_server_set_connect_cb(i, _connect_handler, NULL);
-		pipe_server_set_disconnect_cb(i, _disconnect_handler, NULL);
+		pipe_server_set_connect_cb(N_IMUS+i, _connect_handler, NULL);
+		pipe_server_set_disconnect_cb(N_IMUS+i, _disconnect_handler, NULL);
 
 		if(pipe_server_create(N_IMUS+i, info2, 0)){
 			fprintf(stderr, "WARNING: failed to create FFT pipe for IMU %d\n", i);

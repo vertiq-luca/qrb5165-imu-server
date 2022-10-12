@@ -146,13 +146,14 @@ int f32_ringbuf_copy_out_n_newest(f32_ringbuf_t* buf, int n, float* out)
     if(start<0) start += buf->size;
 
     // copy the first chunk from oldest data
-    int n_first_copy = MIN((buf->size - start), n);
+    int n_first_copy = buf->size-start;
+    if(n_first_copy>n) n_first_copy = n;
     memcpy(out, &buf->d[start], n_first_copy*sizeof(float));
 
     // see if a second copy is needed due to wrap
     if(n_first_copy < n){
         int n_second_copy = n-n_first_copy;
-        memcpy(&out[n_first_copy], buf->d, n_second_copy);
+        memcpy(&out[n_first_copy], buf->d, n_second_copy*sizeof(float));
     }
 
     return 0;

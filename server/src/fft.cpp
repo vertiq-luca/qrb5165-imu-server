@@ -1,5 +1,6 @@
 #include <iostream>
 #include <complex>
+#include <string.h>
 
 #include <modal_pipe_interfaces.h>
 
@@ -83,7 +84,7 @@ static void single_sided_fft_magnitude(complex<float>* f, int n_samples, float* 
 
 static void single_sided_fft_magnitude_array(float* f, int n_samples, float* mag)
 {
-	complex<float> vec[MAX_FFT_BUF_LEN];
+	complex<float> vec[n_samples];
 	for(int i=0; i<n_samples; i++){
 		vec[i]=f[i];
 	}
@@ -103,18 +104,16 @@ static void calc_freq_array(int n_samples, float dt, float* freq_hz)
 
 static int is_power_of_two(int x)
 {
-   //checks whether a number is zero or not
-   if (x == 0)
-      return 0;
+	//checks whether a number is zero or not
+	if(x == 0) return 0;
 
-   //true till x is not equal to 1
-   while( x != 1){
-      //checks whether a number is divisible by 2
-      if(x % 2 != 0)
-         return 0;
-         x /= 2;
-   }
-   return 1;
+	//true till x is not equal to 1
+	while( x != 1){
+		//checks whether a number is divisible by 2
+		if(x % 2 != 0) return 0;
+		x /= 2;
+	}
+	return 1;
 }
 
 
@@ -126,133 +125,133 @@ int main()
 	float dt = 0.001;
 
 	complex<float> vec[MAX] = {0,
-    0.9009,
-    1.4095,
-    1.3368,
-    0.7911,
-    0.1122,
+	0.9009,
+	1.4095,
+	1.3368,
+	0.7911,
+	0.1122,
    -0.3165,
    -0.2780,
-    0.1628,
-    0.6981,
-    0.9511,
-    0.6885,
+	0.1628,
+	0.6981,
+	0.9511,
+	0.6885,
    -0.0433,
    -0.9344,
    -1.5706,
    -1.6511,
    -1.1475,
    -0.3176,
-    0.4329,
-    0.7660,
-    0.5878,
-    0.0910,
+	0.4329,
+	0.7660,
+	0.5878,
+	0.0910,
    -0.3591,
    -0.4317,
    -0.0188,
-    0.7000,
-    1.3503,
-    1.5643,
-    1.1820,
-    0.3416,
+	0.7000,
+	1.3503,
+	1.5643,
+	1.1820,
+	0.3416,
    -0.5878,
    -1.1986,
    -1.2558,
    -0.8150,
    -0.1840,
-    0.2511,
-    0.2391,
+	0.2511,
+	0.2391,
    -0.1982,
    -0.7796,
    -1.1211,
    -0.9511,
    -0.2654,
-    0.6601,
-    1.4106,
-    1.6480,
-    1.2878,
-    0.5404,
+	0.6601,
+	1.4106,
+	1.6480,
+	1.2878,
+	0.5404,
    -0.2042,
    -0.5866,
    -0.4682,
    -0.0000,
-    0.4682,
-    0.5866,
-    0.2042,
+	0.4682,
+	0.5866,
+	0.2042,
    -0.5404,
    -1.2878,
    -1.6480,
    -1.4106,
    -0.6601,
-    0.2654,
-    0.9511,
-    1.1211,
-    0.7796,
-    0.1982,
+	0.2654,
+	0.9511,
+	1.1211,
+	0.7796,
+	0.1982,
    -0.2391,
    -0.2511,
-    0.1840,
-    0.8150,
-    1.2558,
-    1.1986,
-    0.5878,
+	0.1840,
+	0.8150,
+	1.2558,
+	1.1986,
+	0.5878,
    -0.3416,
    -1.1820,
    -1.5643,
    -1.3503,
    -0.7000,
-    0.0188,
-    0.4317,
-    0.3591,
+	0.0188,
+	0.4317,
+	0.3591,
    -0.0910,
    -0.5878,
    -0.7660,
    -0.4329,
-    0.3176,
-    1.1475,
-    1.6511,
-    1.5706,
-    0.9344,
-    0.0433,
+	0.3176,
+	1.1475,
+	1.6511,
+	1.5706,
+	0.9344,
+	0.0433,
    -0.6885,
    -0.9511,
    -0.6981,
    -0.1628,
-    0.2780,
-    0.3165,
+	0.2780,
+	0.3165,
    -0.1122,
    -0.7911,
    -1.3368,
    -1.4095,
    -0.9009,
    -0.0000,
-    0.9009,
-    1.4095,
-    1.3368,
-    0.7911,
-    0.1122,
+	0.9009,
+	1.4095,
+	1.3368,
+	0.7911,
+	0.1122,
    -0.3165,
    -0.2780,
-    0.1628,
-    0.6981,
-    0.9511,
-    0.6885,
+	0.1628,
+	0.6981,
+	0.9511,
+	0.6885,
    -0.0433,
    -0.9344,
    -1.5706,
    -1.6511,
    -1.1475,
    -0.3176,
-    0.4329,
-    0.7660,
-    0.5878,
-    0.0910,
+	0.4329,
+	0.7660,
+	0.5878,
+	0.0910,
    -0.3591,
    -0.4317,
    -0.0188,
-    0.7000,
-    1.3503,
-    1.5643};
+	0.7000,
+	1.3503,
+	1.5643};
 
 	int i;
 	float mag[n_out];
@@ -375,13 +374,11 @@ int fft_buffer_calc(fft_buffer_t* buf, int n, imu_fft_data_t* out)
 	pthread_mutex_unlock(&buf->mtx);
 
 	// now actually calc the results
-	for(i=0;i<6;i++){
-		float* result;
-		if(i<3) result = out->gyro_rad[i];
-		else    result = out->accl_ms2[i-3];
-
-		single_sided_fft_magnitude_array(buf->tmp[i], n, result);
+	for(i=0;i<3;i++){
+		single_sided_fft_magnitude_array(buf->tmp[i],   n, out->gyro_rad[i]);
+		single_sided_fft_magnitude_array(buf->tmp[i+3], n, out->accl_ms2[i]);
 	}
+
 	out->magic_number = IMU_FFT_MAGIC_NUMBER;
 	out->n_freq = (n/2)+1;
 	out->max_freq_hz = buf->sample_rate_hz/2.0f;
