@@ -73,6 +73,10 @@ static int force_imu[N_IMUS]; // debug tool set by args to force an IMU on
 static pthread_t read_thread[N_IMUS];
 static pthread_t fft_thread[N_IMUS];
 static fft_buffer_t fft_buf[N_IMUS];
+static cJSON* pipe_info_json[N_IMUS];
+
+// update the pip info json fields after a cal and during setup
+static void _update_info_json();
 
 
 // printed if some invalid argument was given
@@ -85,20 +89,20 @@ debug options. When started from the command line, voxl-imu-server will automati
 stop the background service so you don't have to stop it manually\n\
 \n\
 -b, --basic               perform basic register reads to get data instead of\n\
-                            reading the IMU's FIFO buffer\n\
+							reading the IMU's FIFO buffer\n\
 -c, --config              only parse the config file and exit, don't run\n\
 -d, --delay {us}          simulate the CPU getting backed up by adding a delay\n\
-                            in microseconds after each fifo read\n\
+							in microseconds after each fifo read\n\
 -f, --print_fifo_count    print num packets read from fifo each cycle\n\
 -h, --help                print this help message\n\
 -i, --enable_imu {i}      force enable an imu (0-%d) that might be disabled\n\
-                            in the config file\n\
+							in the config file\n\
 -p, --print_data          print all data as it's read, this can be a LOT of data\n\
-                            when running at high sample rates, be careful\n\
+							when running at high sample rates, be careful\n\
 -s, --print_timesync      print data about the timesync between apps proc and imu\n\
 -t, --test                run the factory self-test. Both onboard IMUs (0 and 1)\n\
-                            will be tested along with any auxilliary IMUs enabled\n\
-                            in the config file.\n\
+							will be tested along with any auxilliary IMUs enabled\n\
+							in the config file.\n\
 \n", MAX_IMU);
 	return;
 }
@@ -116,6 +120,7 @@ static void _control_pipe_handler(int ch, char* string, int bytes, __attribute__
 	if(strncmp(string, COMMAND_STOP_CAL, strlen(COMMAND_STOP_CAL))==0){
 		printf("Stopping calibration mode!!\n");
 		cal_file_read();
+		_update_info_json();
 		printf("new calibration data:\n");
 		cal_file_print();
 		force_cal_off = 0;
@@ -149,6 +154,35 @@ static void _disconnect_handler(int ch, int client_id, char* name, __attribute__
 {
 	printf("client \"%s\" with id %d has disconnected from channel %d\n", name, client_id, ch);
 	return;
+}
+
+// called after an imu cal to update the server pipe info files
+static void _update_info_json(void)
+{
+	for(int i=0; i<N_IMUS; i++){
+		// skip disabled imus
+		if(!imu_enable[i]) continue;
+		if(pipe_info_json[i]==NULL) continue;
+
+		cJSON* item = cJSON_GetObjectItem(pipe_info_json[i], "is_calibrated");
+		if(item==NULL){
+			fprintf(stderr, "WARNING: could not fetch is_calibrated from JSON\n");
+			continue;
+		}
+		if(has_static_cal) item->type = cJSON_True;
+		else item->type = cJSON_False;
+
+		item = cJSON_GetObjectItem(pipe_info_json[i], "is_temp_calibrated");
+		if(item==NULL){
+			fprintf(stderr, "WARNING: could not fetch is_calibrated from JSON\n");
+			continue;
+		}
+		if(has_temp_cal[i]) item->type = cJSON_True;
+		else item->type = cJSON_False;
+		pipe_server_update_info(i);
+	}
+	return;
+
 }
 
 
@@ -561,6 +595,17 @@ int main(int argc, char* argv[])
 			imu_close(i);
 			continue;
 		}
+
+		// update if the imu is calibrated or not
+		pipe_info_json[i] = pipe_server_get_info_json_ptr(i);
+		if(cJSON_AddBoolToObject(pipe_info_json[i], "is_calibrated", has_static_cal)==NULL){
+			fprintf(stderr, "WARNING: could not add is_calibrated field to info JSON\n");
+		}
+		if(cJSON_AddBoolToObject(pipe_info_json[i], "is_temp_calibrated", has_temp_cal[i])==NULL){
+			fprintf(stderr, "WARNING: could not add is_temp_calibrated field to info JSON\n");
+		}
+		pipe_server_update_info(i);
+
 		pipe_server_set_available_control_commands(i, CONTROL_COMMANDS);
 
 		// create the fft pipe and buffer

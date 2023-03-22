@@ -52,6 +52,7 @@ extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 // declare all config file fields here. define them in config_file.c
 ////////////////////////////////////////////////////////////////////////////////
+extern int has_static_cal;
 extern float gyro_offset[N_IMUS][3];
 extern float accl_offset[N_IMUS][3];
 extern float accl_scale[N_IMUS][3];
@@ -94,6 +95,13 @@ int cal_file_print(void);
  * @return     0 on success, -1 on failure
  */
 int cal_file_write(void);
+
+
+
+/**
+ * @brief      returns 1 is a valid static cal has been read
+ */
+int cal_file_has_static_cal(void);
 
 
 

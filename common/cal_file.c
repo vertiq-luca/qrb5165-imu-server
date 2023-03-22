@@ -51,6 +51,9 @@ static float default_scale[3]  = {1.0f, 1.0f, 1.0f};
 static float default_gyro_drift[3] = {0.0f, 0.0f, 0.0f};
 static float default_accl_drift[3] = {0.0f, 0.0f, 0.0f};
 
+
+int has_static_cal;
+
 float gyro_offset[N_IMUS][3];
 float accl_offset[N_IMUS][3];
 float accl_scale[N_IMUS][3];
@@ -109,18 +112,25 @@ int cal_file_read(void)
 		remove(CALIBRATION_FILE);
 	}
 
-	// make a new one if missing
-	ret = json_make_empty_file_if_missing(CALIBRATION_FILE);
-	if(ret < 0) return -1;
-	else if(ret>0) fprintf(stderr, "Creating new default calibration file: %s\n", CALIBRATION_FILE);
-
 	// something made the file unparsable, user should make a new calibration file
 	cJSON* parent = json_read_file(CALIBRATION_FILE);
 	if(parent==NULL){
 		fprintf(stderr, "\nERROR: Malformed calibration file: %s\n", CALIBRATION_FILE);
 		fprintf(stderr, "Please make a new calibration file with voxl-calibrate-imu\n\n");
 		parent = cJSON_CreateObject();
+		has_static_cal = 0;
 	}
+
+	// check that we didn't just read in an empty file
+	float tmp;
+	if(json_fetch_float(parent, "gyro0_offset", &tmp)!=0){
+		fprintf(stderr, "removing old empty file\n");
+		remove(CALIBRATION_FILE);
+		has_static_cal = 0;
+	}
+
+	// okay, now we can read in the file, populating any missing values with defaults
+	has_static_cal = 1;
 
 
 	json_fetch_fixed_vector_float_with_default(	parent, "gyro0_offset",			&gyro_offset[0][0], 3, default_offset);
