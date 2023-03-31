@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2020 ModalAI Inc.
+ * Copyright 2023 ModalAI Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -223,6 +223,11 @@ static int _parse_opts(int argc, char* argv[])
 
 		case 'c':
 			if(config_file_read()){
+				exit(-1);
+			}
+			// read cal file so that during the voxl-mpa-configure procedure
+			// we can validate the cal file and delete old invalid ones
+			if(cal_file_read()){
 				exit(-1);
 			}
 			exit(0);

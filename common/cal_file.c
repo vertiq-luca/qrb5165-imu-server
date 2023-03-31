@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2020 ModalAI Inc.
+ * Copyright 2023 ModalAI Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -105,34 +105,51 @@ int cal_file_print(void)
  */
 int cal_file_read(void)
 {
-	// check for old empty file from an old install and wipe it if there
-	int ret = system("grep -q -e \"gyro0_offset 0.0 0.0\" /data/modalai/voxl-imu-server.cal");
-	if(ret==0){
-		fprintf(stderr, "removing old empty file\n");
-		remove(CALIBRATION_FILE);
-	}
-
-	// something made the file unparsable, user should make a new calibration file
-	cJSON* parent = json_read_file(CALIBRATION_FILE);
-	if(parent==NULL){
-		fprintf(stderr, "\nERROR: Malformed calibration file: %s\n", CALIBRATION_FILE);
-		fprintf(stderr, "Please make a new calibration file with voxl-calibrate-imu\n\n");
-		parent = cJSON_CreateObject();
-		has_static_cal = 0;
-	}
-
-	// check that we didn't just read in an empty file
-	float tmp;
-	if(json_fetch_float(parent, "gyro0_offset", &tmp)!=0){
-		fprintf(stderr, "removing old empty file\n");
-		remove(CALIBRATION_FILE);
-		has_static_cal = 0;
-	}
-
-	// okay, now we can read in the file, populating any missing values with defaults
+	// assume we are calibrated until indicaged otherwise
 	has_static_cal = 1;
+	cJSON* parent = NULL;
+
+	if(access(CALIBRATION_FILE, F_OK) != 0){
+		printf("voxl-imu-server currently has no calibration file\n");
+		has_static_cal = 0;
+
+	}
+	else{
+		// check for old empty file from an old install and wipe it if there
+		int ret = system("grep -q -e \"gyro0_offset 0.0 0.0\" /data/modalai/voxl-imu-server.cal");
+		if(ret==0){
+			fprintf(stderr, "removing old empty file\n");
+			remove(CALIBRATION_FILE);
+			has_static_cal = 0;
+		}
+		else{
+			// something made the file unparsable, user should make a new calibration file
+			parent = json_read_file(CALIBRATION_FILE);
+			if(parent==NULL){
+				fprintf(stderr, "\nERROR: Malformed calibration file: %s\n", CALIBRATION_FILE);
+				fprintf(stderr, "Please make a new calibration file with voxl-calibrate-imu\n\n");
+				parent = cJSON_CreateObject();
+				has_static_cal = 0;
+			}
+			else{
+				// check that we didn't just read in an empty file
+				cJSON* tmp = cJSON_GetObjectItem(parent, "gyro0_offset");
+				if(tmp==NULL){
+					fprintf(stderr, "missing gyro0_offset, removing old empty file\n");
+					remove(CALIBRATION_FILE);
+					has_static_cal = 0;
+				}
+			}
+		}
+	}
+
+	if(!has_static_cal){
+		parent = cJSON_CreateObject();
+	}
 
 
+	// now actually load everything and place defaults where cal file was missing things
+	// note, unlike a config file we don't write this back to disk!!
 	json_fetch_fixed_vector_float_with_default(	parent, "gyro0_offset",			&gyro_offset[0][0], 3, default_offset);
 	json_fetch_fixed_vector_float_with_default(	parent, "accl0_offset",			&accl_offset[0][0], 3, default_offset);
 	json_fetch_fixed_vector_float_with_default(	parent, "accl0_scale",			&accl_scale[0][0],  3, default_scale);

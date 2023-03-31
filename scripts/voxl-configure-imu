@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# Copyright 2021 ModalAI Inc.
+# Copyright 2023 ModalAI Inc.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -53,7 +53,6 @@ print_usage () {
 	echo "show this help message:"
 	echo "voxl-configure-imu help"
 	echo ""
-	exit 0
 }
 
 
@@ -100,8 +99,6 @@ disable_service_and_exit () {
 enable_service_and_exit () {
 	echo "enabling  ${NAME} systemd service"
 	systemctl enable  ${SERVICE_FILE}
-	echo "starting  ${NAME} systemd service"
-	systemctl restart  ${SERVICE_FILE}
 	echo "Done configuring ${NAME}"
 	exit 0
 }

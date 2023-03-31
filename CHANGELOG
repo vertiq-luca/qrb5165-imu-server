@@ -1,5 +1,7 @@
 0.6.0
     * publish if the imu is calibrated or not in the info json
+    * clean up old empty cal files during setup
+    * fix configure script and bash completion
 0.5.0
     * add an fft pipe
 0.4.2
