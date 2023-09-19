@@ -1,3 +1,5 @@
+0.9.1
+    * resync deb version with tag
 0.6.0
     * publish if the imu is calibrated or not in the info json
     * clean up old empty cal files during setup
