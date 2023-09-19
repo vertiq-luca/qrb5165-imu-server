@@ -19,13 +19,13 @@ DEPS_APQ8096=""
 
 ## this list is just for tab-completion
 ## it's not an exhaustive list of platforms available.
-AVAILABLE_PLATFORMS="apq8096"
+AVAILABLE_PLATFORMS="qrb5165"
 
 
 print_usage(){
 	echo ""
 	echo " Install build dependencies from a specified repository."
-	echo " For apq8096 \"dev\" and \"stable\" repos the packages"
+	echo " For qrb5165 \"dev\" and \"stable\" repos the packages"
 	echo " will be pulled as IPKs and installed with opkg."
 	echo ""
 	echo " Usage:"
@@ -33,11 +33,11 @@ print_usage(){
 	echo ""
 	echo " Examples:"
 	echo ""
-	echo "  ./install_build_deps.sh apq8096 dev"
-	echo "        Install from apq8096 development repo."
+	echo "  ./install_build_deps.sh qrb5165 dev"
+	echo "        Install from qrb5165 development repo."
 	echo ""
-	echo "  ./install_build_deps.sh apq8096 stable"
-	echo "        Install from apq8096 stable repo."
+	echo "  ./install_build_deps.sh qrb5165 stable"
+	echo "        Install from qrb5165 stable repo."
 	echo ""
 	echo ""
 	echo " These examples are not an exhaustive list."

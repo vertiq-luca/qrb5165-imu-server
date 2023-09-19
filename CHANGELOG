@@ -1,3 +1,5 @@
+0.9.2
+    * fix build-time regression due to libqrb5165-io update
 0.9.1
     * resync deb version with tag
 0.6.0

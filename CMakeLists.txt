@@ -10,6 +10,10 @@ set(CMAKE_C_FLAGS "-g -std=gnu99 -Wall -Wextra -Wuninitialized \
 	-Wunused-variable -Wdouble-promotion -Wmissing-prototypes \
 	-Wmissing-declarations -Werror=undef -Wno-int-to-pointer-cast -Wno-unused-function ${CMAKE_C_FLAGS}")
 
+# tell the linker not to worry about missing symbols in libraries
+set(CMAKE_C_FLAGS   "-Wl,--unresolved-symbols=ignore-in-shared-libs ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "-std=c++11 -O3 -Wl,--unresolved-symbols=ignore-in-shared-libs ${CMAKE_CXX_FLAGS}")
+
 # server and client binaries
 add_subdirectory(server)
 add_subdirectory(clients)
