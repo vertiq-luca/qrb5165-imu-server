@@ -58,9 +58,10 @@ typedef struct imu_self_test_result_t{
 
 #define FIFO_READ_BUF_LEN	4096
 
-// VOXL1 board revisions
-#define BOARD_M0053 2 // rb5-flight
-#define BOARD_M0054 1 // qrb5165
+// VOXL board revisions
+#define BOARD_M0104 3 // voxl2 mini
+#define BOARD_M0053 2 // rb5-flight, irrelevant since m0053 doesn't have an apps proc imu
+#define BOARD_M0054 1 // voxl2
 #define BOARD_UNKNOWN 0
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -34,6 +34,7 @@
 
 #include <stdio.h>
 #include <voxl_io.h>
+#include <string.h>
 
 #include "config_file.h"
 #include "cal_file.h"
@@ -235,26 +236,51 @@ int imu_rotate_to_common_frame(__attribute__((unused)) int id, imu_data_t* data)
 		data->gyro_rad[2] = -data->gyro_rad[2];
 		data->accl_ms2[2] = -data->accl_ms2[2];
 	}
+	else if(board_id == BOARD_M0104){
+		data->gyro_rad[0] = -data->gyro_rad[0];
+		data->accl_ms2[0] = -data->accl_ms2[0];
+		data->gyro_rad[1] = -data->gyro_rad[1];
+		data->accl_ms2[1] = -data->accl_ms2[1];
+	}
 	return 0;
 }
 
 
 int imu_detect_board()
 {
-	if(imu_detect(0)){
-		fprintf(stderr, "ERROR in %s detecting imu0\n", __FUNCTION__);
+	// default to VOXL2 (M0054)
+	board_id = BOARD_UNKNOWN;
+
+	FILE *file = fopen("/etc/version", "r");
+
+	if (file == NULL) {
+		perror("Error opening /etc/modalai");
 		return -1;
 	}
 
-	// now decide which board we are on based on IMUs
-	if(ic[0]==IMU_IC_ICM42688){
+	char line[512];
+
+	if(fgets(line, sizeof(line), file) == NULL) {
+		fprintf(stderr, "ERROR failed to read line from /etc/version, assuming VOXL2\n");
+		return -1;
+	}
+
+	// Check if the substring is present in the line
+	if(strstr(line, "M0054") != NULL){
+		printf("Detected M0054 VOXL2\n");
 		board_id = BOARD_M0054;
-		printf("Detected board M0054\n");
+	}
+	else if(strstr(line, "M0104") != NULL){
+		printf("Detected M0104 VOXL2 mini\n");
+		board_id = BOARD_M0104;
 	}
 	else{
+		fprintf(stderr, "ERROR failed to pick board from /etc/version\n");
 		board_id = BOARD_UNKNOWN;
-		fprintf(stderr, "WARNING unknown VOXL board configuration\n");
 	}
+
+	fclose(file);
+
 	return 0;
 }
 
