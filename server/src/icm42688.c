@@ -37,6 +37,7 @@
 #include <string.h> // for memset
 #include <math.h>
 
+#include <modal_start_stop.h>
 #include <voxl_io.h>
 #include <rc_math/timestamp_filter.h>
 #include "icm42688.h"
@@ -55,8 +56,9 @@ static const float accl_scale_16 = (16.0*G_TO_MS2)/32767.0;
 static const float gyro_scale_20 = (2000.0*DEG_TO_RAD)/524287.0;
 static const float accl_scale_20 = (16.0*G_TO_MS2)/524287.0;
 
-static int current_bank[16];
-static double configured_odr_hz[16];
+#define MAX_BUS 32
+static int current_bank[MAX_BUS];
+static double configured_odr_hz[MAX_BUS];
 
 // ratio of imu clock speed to apps proc
 // imu runs faster than requested due to 32.768khz clock instead of 32khz, start with this known correction factor, this value is estimated in realtime
@@ -390,7 +392,8 @@ int icm42688_fifo_stop(int bus)
 
 int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buffer)
 {
-	static int n_empty_reads = 0;
+	static uint64_t last_published_ts_ns[MAX_BUS] = {0};
+	static int n_empty_reads[MAX_BUS] = {0};
 
 	int records = 0;
 	*packets = 0; // make sure we indicate nothing has been read if we return early
@@ -417,6 +420,10 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 	int ret = voxl_spi_read_imu_fifo(bus, ICM42688_UB0_REG_FIFO_COUNTH, \
 				ICM42688_UB0_REG_FIFO_DATA, p_len, &records, \
 				fifo_buffer, p_max*p_len, SPI_SPEED_BASE, SPI_SPEED_DATA);
+
+	int64_t time_after_read = voxl_apps_time_monotonic_ns();
+	printf("time to read fifo: %0.1f\n", (double)(time_after_read-time_before_read)/1000000.0);
+
 	if(ret){
 		rc_ts_filter_report_bad_read(&f[bus]);
 		fprintf(stderr, "ERROR icm42688_fifo_read: reader found an issue\n");
@@ -427,9 +434,9 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 	}
 	if(records==0){
 		// should never pass mmore than a few empty reads in a row
-		n_empty_reads++;
-		if (n_empty_reads >= 10){
-			fprintf(stderr, "ERROR icm42688_fifo_read: buffer was empty %d times in a row\n", n_empty_reads);
+		n_empty_reads[bus]++;
+		if (n_empty_reads[bus] >= 10){
+			fprintf(stderr, "ERROR icm42688_fifo_read: buffer was empty %d times in a row\n", n_empty_reads[bus]);
 			return -1;
 		}
 		return 0;
@@ -456,11 +463,34 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		fprintf(stderr, "WARNING FIFO ALMOST FULL\n");
 	}
 
+	// start old recorded time on first run
+	if(last_published_ts_ns[bus]==0){
+		last_published_ts_ns[bus]=time_before_read - (f[bus].estimated_dt*records);
+	}
 
-	// calculate the best-guess filtered timestamp
+
+	// time to read the fifo is usually about 0.2ms per sample
+	// if we exceeded 3ms more than that, the cpu probably went to sleep
+	// halfway through the read. This might not be an issue since we take the
+	// time before the read when it checks the count register, but to be
+	// safe we should not put this data into our filter
+	int64_t filtered_ts_ns;
 	int64_t ts_estimate = (time_before_read - READ_DELAY_NS) - (500000000/configured_odr_hz[bus]);
-	int64_t filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], ts_estimate, records);
+	if((time_after_read-time_before_read) < ((records*200000)+3000000)){
+		// calculate the best-guess filtered timestamp
+		filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], ts_estimate, records);
+	}
+	else{
+		rc_ts_filter_report_bad_read(&f[bus]);
+		fprintf(stderr,"warning slow fifo read %0.1fms\n", (double)(ts_estimate-last_published_ts_ns[bus])/1000000.0 );
+		filtered_ts_ns = last_published_ts_ns[bus] + ((records+1) * f[bus].estimated_dt * 1000000000);
+	}
 	int64_t new_dt_ns = f[bus].estimated_dt * 1000000000;
+
+	// TODO, replace the dt that the filter is estimating with one that would
+	// correctly interpolate from the last published timestamp to the current
+	// filtered time instead of blindly extrapolating backwards.
+
 
 	// now loop through and decode each packet
 	for(int i=0;i<records;i++){
@@ -535,8 +565,20 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 
 		// place timestamp based on our previous filtering
 		data[i].timestamp_ns = filtered_ts_ns - ((records-i-1)*new_dt_ns);
+
+		if(data[i].timestamp_ns <= last_published_ts_ns[bus]){
+			// should never get here if we did our checks above correctly
+			fprintf(stderr, "--------------------------------------\n");
+			fprintf(stderr, "ERROR, detected out of order timestamp\n");
+			fprintf(stderr, "--------------------------------------\n");
+			// main_running = 0;
+		}
 	}
-	n_empty_reads = 0;
+
+	last_published_ts_ns[bus] = data[records-1].timestamp_ns;
+
+
+	n_empty_reads[bus] = 0;
 	*packets = records;
 	return 0;
 }

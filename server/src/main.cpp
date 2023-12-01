@@ -490,18 +490,18 @@ int main(int argc, char* argv[])
 // set this critical process to use FIFO scheduler with medium priority
 ////////////////////////////////////////////////////////////////////////////////
 
-	struct sched_param param;
-	memset(&param, 0, sizeof(param));
-	param.sched_priority = 50;
-	int ret = sched_setscheduler(0, SCHED_FIFO, &param);
-	if(ret==-1){
-		fprintf(stderr, "WARNING Failed to set priority, errno = %d\n", errno);
-	}
-	// check
-	ret = sched_getscheduler(0);
-	if(ret!=SCHED_FIFO){
-		fprintf(stderr, "WARNING: failed to set scheduler\n");
-	}
+	// struct sched_param param;
+	// memset(&param, 0, sizeof(param));
+	// param.sched_priority = 50;
+	// int ret = sched_setscheduler(0, SCHED_FIFO, &param);
+	// if(ret==-1){
+	// 	fprintf(stderr, "WARNING Failed to set priority, errno = %d\n", errno);
+	// }
+	// // check
+	// ret = sched_getscheduler(0);
+	// if(ret!=SCHED_FIFO){
+	// 	fprintf(stderr, "WARNING: failed to set scheduler\n");
+	// }
 
 
 ////////////////////////////////////////////////////////////////////////////////
