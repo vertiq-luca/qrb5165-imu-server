@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2020 ModalAI Inc.
+ * Copyright 2023 ModalAI Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -393,6 +393,7 @@ int icm42688_fifo_stop(int bus)
 int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_buffer)
 {
 	static uint64_t last_published_ts_ns[MAX_BUS] = {0};
+	static int has_had_first_run[MAX_BUS] = {0};
 	static int n_empty_reads[MAX_BUS] = {0};
 
 	int records = 0;
@@ -422,7 +423,9 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 				fifo_buffer, p_max*p_len, SPI_SPEED_BASE, SPI_SPEED_DATA);
 
 	int64_t time_after_read = voxl_apps_time_monotonic_ns();
-	printf("time to read fifo: %0.1f\n", (double)(time_after_read-time_before_read)/1000000.0);
+	if(en_print_timesync){
+		printf("time to read fifo: %0.1f\n", (double)(time_after_read-time_before_read)/1000000.0);
+	}
 
 	if(ret){
 		rc_ts_filter_report_bad_read(&f[bus]);
@@ -463,11 +466,6 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		fprintf(stderr, "WARNING FIFO ALMOST FULL\n");
 	}
 
-	// start old recorded time on first run
-	if(last_published_ts_ns[bus]==0){
-		last_published_ts_ns[bus]=time_before_read - (f[bus].estimated_dt*records);
-	}
-
 
 	// time to read the fifo is usually about 0.2ms per sample
 	// if we exceeded 3ms more than that, the cpu probably went to sleep
@@ -481,15 +479,33 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 		filtered_ts_ns = rc_ts_filter_calc_multi(&f[bus], ts_estimate, records);
 	}
 	else{
-		rc_ts_filter_report_bad_read(&f[bus]);
-		fprintf(stderr,"warning slow fifo read %0.1fms\n", (double)(ts_estimate-last_published_ts_ns[bus])/1000000.0 );
-		filtered_ts_ns = last_published_ts_ns[bus] + ((records+1) * f[bus].estimated_dt * 1000000000);
+		if(en_print_timesync){
+			fprintf(stderr,"detected slow fifo read\n");
+		}
+		filtered_ts_ns = last_published_ts_ns[bus] + (records * f[bus].estimated_dt * 1000000000);
+		f[bus].last_ts_ns = filtered_ts_ns; // keep filter happy without resetting it
 	}
-	int64_t new_dt_ns = f[bus].estimated_dt * 1000000000;
 
-	// TODO, replace the dt that the filter is estimating with one that would
-	// correctly interpolate from the last published timestamp to the current
+	// interpolate from the last published timestamp to the current
 	// filtered time instead of blindly extrapolating backwards.
+	int64_t new_dt_ns = (filtered_ts_ns - last_published_ts_ns[bus]) / records;
+	if(!has_had_first_run[bus]) new_dt_ns = 1000000000 * f[bus].estimated_dt;
+
+	// double check nothing bad happened
+	double new_dt_ms = (double)new_dt_ns/1000000.0;
+	double filtered_dt_ms = (double)f[bus].estimated_dt * 1000.0;
+	if(new_dt_ms < 0){
+		fprintf(stderr, "ERROR got a negative dt: %fms\n", new_dt_ms);
+		rc_ts_filter_report_bad_read(&f[bus]);
+		return 0;
+	}
+	if(fabs((new_dt_ms-filtered_dt_ms)/filtered_dt_ms) > 0.2){
+		if(has_had_first_run[bus]){
+			fprintf(stderr, "WARNING: predicted dt %fms differs greatly from filtered dt %fms\n", new_dt_ms, filtered_dt_ms);
+		}
+		// not sure what to do here unless it happens in practice
+		// for now it's to help catch future potential issues
+	}
 
 
 	// now loop through and decode each packet
@@ -504,6 +520,7 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 			icm42688_fifo_reset(bus);
 			return -1; // really bad
 		}
+
 		// catastrophic failure would have returned all 0's and tripped the
 		// previous check. If the header is wrong most likely the configuration
 		// registers have been fiddled with so keep going in hopes that the
@@ -512,7 +529,6 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 			fprintf(stderr, "ERROR in icm42688_read_fifo, invalid header: %d expected: %d\n",\
 														base[0], correct_header);
 		}
-
 
 		// grab 16-bit accel and gyro data
 		int16_t ax16,ay16,az16,gx16,gy16,gz16;
@@ -571,13 +587,13 @@ int icm42688_fifo_read(int bus, imu_data_t* data, int* packets, uint8_t* fifo_bu
 			fprintf(stderr, "--------------------------------------\n");
 			fprintf(stderr, "ERROR, detected out of order timestamp\n");
 			fprintf(stderr, "--------------------------------------\n");
-			// main_running = 0;
+			// main_running = 0; // uncomment to help catch this debugging
 		}
 	}
 
 	last_published_ts_ns[bus] = data[records-1].timestamp_ns;
 
-
+	has_had_first_run[bus] = 1;
 	n_empty_reads[bus] = 0;
 	*packets = records;
 	return 0;

@@ -40,6 +40,7 @@
 #include <stdlib.h> // for atoi(), exit(), and system()
 #include <sched.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include <modal_start_stop.h>
 #include <modal_pipe_server.h>
@@ -61,6 +62,7 @@
 int en_print_fifo_count = 0;
 int en_print_data = 0;
 int en_print_timesync = 0;
+int en_print_timestamps = 0;
 
 // local vars
 static int en_basic_read = 0;
@@ -89,20 +91,21 @@ debug options. When started from the command line, voxl-imu-server will automati
 stop the background service so you don't have to stop it manually\n\
 \n\
 -b, --basic               perform basic register reads to get data instead of\n\
-							reading the IMU's FIFO buffer\n\
+                            reading the IMU's FIFO buffer\n\
 -c, --config              only parse the config file and exit, don't run\n\
 -d, --delay {us}          simulate the CPU getting backed up by adding a delay\n\
-							in microseconds after each fifo read\n\
+                            in microseconds after each fifo read\n\
 -f, --print_fifo_count    print num packets read from fifo each cycle\n\
 -h, --help                print this help message\n\
 -i, --enable_imu {i}      force enable an imu (0-%d) that might be disabled\n\
-							in the config file\n\
+                            in the config file\n\
 -p, --print_data          print all data as it's read, this can be a LOT of data\n\
-							when running at high sample rates, be careful\n\
+                            when running at high sample rates, be careful\n\
 -s, --print_timesync      print data about the timesync between apps proc and imu\n\
 -t, --test                run the factory self-test. Both onboard IMUs (0 and 1)\n\
-							will be tested along with any auxilliary IMUs enabled\n\
-							in the config file.\n\
+                            will be tested along with any auxilliary IMUs enabled\n\
+                            in the config file.\n\
+-u, --print_timestamps    print every sample timestamp in nanoseconds for debugging\n\
 \n", MAX_IMU);
 	return;
 }
@@ -199,13 +202,14 @@ static int _parse_opts(int argc, char* argv[])
 		{"print_data",            no_argument,       0, 'p'},
 		{"print_timesync",        no_argument,       0, 's'},
 		{"test",                  no_argument,       0, 't'},
+		{"print_timestamps",      no_argument,       0, 'u'},
 		{0, 0, 0, 0}
 	};
 
 	while(1){
 		int id;
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "bcd:fhi:pst", long_options, &option_index);
+		int c = getopt_long(argc, argv, "bcd:fhi:pstu", long_options, &option_index);
 
 		if(c == -1) break; // Detect the end of the options.
 
@@ -287,6 +291,11 @@ static int _parse_opts(int argc, char* argv[])
 			// }
 			break;
 
+		case 'u':
+			printf("enabling debug print of all timestamps\n");
+			en_print_timestamps = 1;
+			break;
+
 		default:
 			_print_usage();
 			return -1;
@@ -364,6 +373,9 @@ static void* _read_thread_func(void* context)
 		if(en_print_data && packets_read>0){
 			// only print last packet or it's too much
 			imu_print_data(id, data[packets_read-1]);
+		}
+		if(en_print_timestamps){
+			for(i=0;i<packets_read;i++) printf("%10" PRId64 "\n", data[i].timestamp_ns);
 		}
 
 		// send to pipe
@@ -487,21 +499,21 @@ int main(int argc, char* argv[])
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// set this critical process to use FIFO scheduler with medium priority
+// set this critical process to use FIFO scheduler with high priority
 ////////////////////////////////////////////////////////////////////////////////
 
-	// struct sched_param param;
-	// memset(&param, 0, sizeof(param));
-	// param.sched_priority = 50;
-	// int ret = sched_setscheduler(0, SCHED_FIFO, &param);
-	// if(ret==-1){
-	// 	fprintf(stderr, "WARNING Failed to set priority, errno = %d\n", errno);
-	// }
-	// // check
-	// ret = sched_getscheduler(0);
-	// if(ret!=SCHED_FIFO){
-	// 	fprintf(stderr, "WARNING: failed to set scheduler\n");
-	// }
+	struct sched_param param;
+	memset(&param, 0, sizeof(param));
+	param.sched_priority = THREAD_PRIORITY_RT_HIGH;
+	int ret = sched_setscheduler(0, SCHED_FIFO, &param);
+	if(ret==-1){
+		fprintf(stderr, "WARNING Failed to set priority, errno = %d\n", errno);
+	}
+	// check
+	ret = sched_getscheduler(0);
+	if(ret!=SCHED_FIFO){
+		fprintf(stderr, "WARNING: failed to set scheduler\n");
+	}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -671,8 +683,9 @@ int main(int argc, char* argv[])
 	pthread_attr_init(&tattr);
 	for(i=0;i<N_IMUS;i++){
 		if(imu_enable[i]){
-			pthread_create(&read_thread[i], &tattr, _read_thread_func, (void*)i);
-			pthread_create(&fft_thread[i], &tattr, _fft_thread_func, (void*)i);
+			int64_t j = i;
+			pthread_create(&read_thread[i], &tattr, _read_thread_func, (void*)j);
+			pthread_create(&fft_thread[i], &tattr, _fft_thread_func, (void*)j);
 		}
 	}
 
