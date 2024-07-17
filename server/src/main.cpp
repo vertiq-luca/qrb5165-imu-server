@@ -41,16 +41,22 @@
 #include <sched.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <rc_math.h>
+
+
+#include <c_library_v2/common/mavlink.h>
 
 #include <modal_start_stop.h>
 #include <modal_pipe_server.h>
+#include <modal_pipe_client.h>
+
 
 #include "config_file.h"
 #include "cal_file.h"
 #include "imu_interface.h"
 #include "misc.h"
 #include "fft.h"
-
+#define SYS_STATUS_OUT_PATH	(MODAL_PIPE_DEFAULT_BASE_DIR "mavlink_onboard/")
 #define PROCESS_NAME "voxl-imu-server" // for PID file name
 
 // mpu9250 can read the most in one go: 292. Increase this is a new imu is added
@@ -377,7 +383,9 @@ static void* _read_thread_func(void* context)
 		if(en_print_timestamps){
 			for(i=0;i<packets_read;i++) printf("%10" PRId64 "\n", data[i].timestamp_ns);
 		}
-
+		pthread_mutex_lock(&rpm_mtx);
+		data[0].temp_c = float(motor_rpm[0]);
+		pthread_mutex_unlock(&rpm_mtx);
 		// send to pipe
 		if(packets_read>0){
 			//int64_t t1 = my_time_monotonic_ns();
@@ -436,6 +444,31 @@ static void* _fft_thread_func(void* context)
 	}
 
 	return NULL;
+}
+
+static void _rpm_gather_cb(__attribute__((unused))int ch, char* data, int bytes, __attribute__((unused)) void* context)
+{
+	// validate that the data makes sense
+	int n_packets;
+	mavlink_message_t* msg_array = pipe_validate_mavlink_message_t(data, bytes, &n_packets);
+	if(msg_array == NULL){
+		return;
+	}
+	for (int ii = 0; ii < n_packets; ++ii)
+	{
+		if (msg_array[ii].msgid == MAVLINK_MSG_ID_ESC_STATUS && msg_array[ii].len > 3)
+		{
+			mavlink_message_t* msg = &msg_array[ii];
+			uint8_t index = mavlink_msg_esc_status_get_index(msg);
+			if (index >= 0 && index < 4)
+			{
+				pthread_mutex_lock(&rpm_mtx);
+				mavlink_msg_esc_status_get_rpm(msg, &motor_rpm[index]);
+				pthread_mutex_unlock(&rpm_mtx);
+			}
+		}
+	}
+	return;
 }
 
 
@@ -670,7 +703,36 @@ int main(int argc, char* argv[])
 		}
 	}
 
+////////////////////////////////////////////////////////////////////////////////
+// Open RPM reader if configured
+////////////////////////////////////////////////////////////////////////////////
 
+	for(i = 0; i < N_IMUS; i++)
+	{
+		for (int jj = 0; jj < num_motors; jj++)
+		{
+			for (int kk = 0; kk < NUM_IMU_AXIS; kk++)
+			{
+				motor_notches[i][jj][kk] = RC_FILTER_INITIALIZER;
+				rc_filter_butterworth_lowpass(&motor_notches[i][jj][kk], 2, imu_sample_rate_hz[i], 100);
+				// rc_filter_first_order_lowpass(&motor_notches[i][jj][kk], 0.001, 50);
+			}
+		}
+	}
+
+
+	pipe_client_set_simple_helper_cb(3, _rpm_gather_cb, NULL);
+
+	ret = pipe_client_open(3, SYS_STATUS_OUT_PATH, PROCESS_NAME, \
+				EN_PIPE_CLIENT_SIMPLE_HELPER | EN_PIPE_CLIENT_AUTO_RECONNECT, \
+								MAVLINK_MESSAGE_T_RECOMMENDED_READ_BUF_SIZE);
+
+	if(ret){
+		fprintf(stderr, "ERROR: failed to open pipe %s\n", SYS_STATUS_OUT_PATH);
+		pipe_print_error(ret);
+		fprintf(stderr, "Probably voxl-mavlink-hub is not running\n");
+		return -1;
+	}
 ////////////////////////////////////////////////////////////////////////////////
 // start read threads and wait
 ////////////////////////////////////////////////////////////////////////////////

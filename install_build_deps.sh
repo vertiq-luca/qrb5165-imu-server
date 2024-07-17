@@ -12,6 +12,7 @@ DEPS_QRB5165="
 librc-math
 libmodal-pipe
 libmodal-json
+voxl-mavlink
 voxl-cpu-monitor
 libvoxl-io"
 
