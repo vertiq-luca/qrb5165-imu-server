@@ -63,6 +63,8 @@
 // which allows for more. For now use buffers with 300 for some padding.
 #define MAX_FIFO_SAMPLES 300
 
+#define NUM_IMU_AXIS 6
+
 // extern debug vars shared across anything that might want to print debug info
 #include "global_debug_flags.h"
 int en_print_fifo_count = 0;
@@ -82,6 +84,12 @@ static pthread_t read_thread[N_IMUS];
 static pthread_t fft_thread[N_IMUS];
 static fft_buffer_t fft_buf[N_IMUS];
 static cJSON* pipe_info_json[N_IMUS];
+
+static int32_t motor_rpm[8];
+static int num_motors = 2;
+pthread_mutex_t rpm_mtx;
+
+rc_filter_t motor_notches[N_IMUS][8][NUM_IMU_AXIS];
 
 // update the pip info json fields after a cal and during setup
 static void _update_info_json();
@@ -330,8 +338,11 @@ static void* _read_thread_func(void* context)
 {
 	static int64_t next_time = 0;
 	int id = (intptr_t)context;
-	int ret, i;
+	int ret, i, jj, kk;
+	double c, num[2], den[2], dt;
+	int32_t local_motor_rpm[8];
 	imu_data_t data[MAX_FIFO_SAMPLES];
+	imu_data_t filtered_data[MAX_FIFO_SAMPLES];
 	int packets_read;		// number of packets read from fifo each cycle
 
 	// assign magic number to each imu_data_struct ahead of time
@@ -349,7 +360,7 @@ static void* _read_thread_func(void* context)
 				usleep(100000);
 				continue;
 			}
-			ret = imu_fifo_read(id, data, &packets_read);
+			ret = imu_fifo_read(id, data, &packets_read); // data coming from imu
 		}
 		else{ // basic mode read
 			ret = imu_basic_read(id, &data[0]);
@@ -371,6 +382,52 @@ static void* _read_thread_func(void* context)
 		if(!force_common_frame_off && imu_rotate_common_frame[id]){
 			for(i=0;i<packets_read;i++) imu_rotate_to_common_frame(id, &data[i]);
 		}
+		// rcfilter march
+		// loop on packets read (about 10 ish). Store the output in new vector and reapply to read packets
+		pthread_mutex_lock(&rpm_mtx);
+		for (i = 0; i < num_motors; i++)
+		{
+			local_motor_rpm[i] = motor_rpm[i];
+		}
+		pthread_mutex_unlock(&rpm_mtx);
+				
+		for(i = 0; i < packets_read; i++)
+		{
+			for (jj = 0; jj < num_motors; jj++)
+			{
+				//rc_filter_t motor_notches[N_IMUS][8][NUM_IMU_AXIS];
+
+				// update filters to motor RPM based on most recent motor RPM
+				dt = 1 / imu_sample_rate_hz[id];
+				c = dt/local_motor_rpm[jj]; // these can be updated realtime to match my rpm
+				num[0] = c;
+				num[1] = 0.0;
+				den[0] = 1.0;
+				den[1] = c - 1.0;
+				for (kk = 0; kk < NUM_IMU_AXIS; kk++)
+				{
+					rc_filter_alloc_from_arrays(&motor_notches[id][num_motors][kk],dt,num,2,den,2);
+				}
+				filtered_data[i].accl_ms2[0] = rc_filter_march(&motor_notches[id][jj][0], data[i].accl_ms2[0]);
+				filtered_data[i].accl_ms2[1] = rc_filter_march(&motor_notches[id][jj][1], data[i].accl_ms2[1]);
+				filtered_data[i].accl_ms2[2] = rc_filter_march(&motor_notches[id][jj][2], data[i].accl_ms2[2]);
+				filtered_data[i].gyro_rad[0] = rc_filter_march(&motor_notches[id][jj][3], data[i].gyro_rad[0]);
+				filtered_data[i].gyro_rad[1] = rc_filter_march(&motor_notches[id][jj][4], data[i].gyro_rad[1]);
+				filtered_data[i].gyro_rad[2] = rc_filter_march(&motor_notches[id][jj][5], data[i].gyro_rad[2]);
+			}
+		}
+
+		for(i = 0; i < packets_read; i++)
+		{
+			data[i].accl_ms2[0] = filtered_data[i].accl_ms2[0];
+			data[i].accl_ms2[1] = filtered_data[i].accl_ms2[1];
+			data[i].accl_ms2[2] = filtered_data[i].accl_ms2[2];
+			data[i].gyro_rad[0] = filtered_data[i].gyro_rad[0];
+			data[i].gyro_rad[1] = filtered_data[i].gyro_rad[1];
+			data[i].gyro_rad[2] = filtered_data[i].gyro_rad[2];
+		}
+		// output of filter written back into data packet. Do a second forloop for this one so I don't refilter
+		// data is what I'm filling "imu_data_t"
 
 		// optional debug prints
 		if(en_print_fifo_count){
