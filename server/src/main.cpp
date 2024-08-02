@@ -92,7 +92,7 @@ static int num_motors = 2;
 static const double min_rad_s = 150;
 pthread_mutex_t rpm_mtx;
 
-rc_filter_t motor_notches[N_IMUS][8][NUM_IMU_AXIS];
+rc_filter_t motor_notches[N_IMUS][8][NUM_IMU_AXIS][NUM_IMU_HARMONICS];
 
 // update the pip info json fields after a cal and during setup
 static void _update_info_json();
@@ -341,7 +341,7 @@ static void* _read_thread_func(void* context)
 {
 	static int64_t next_time = 0;
 	int id = (intptr_t)context;
-	int ret, i, jj, kk;
+	int ret, i, jj, kk, ll;
 	int32_t local_motor_rpm[8];
 	double local_motor_w[8];
 	imu_data_t data[MAX_FIFO_SAMPLES];
@@ -409,21 +409,25 @@ static void* _read_thread_func(void* context)
 				// update filters to motor RPM based on most recent motor RPM
 				for (kk = 0; kk < NUM_IMU_AXIS; kk++)
 				{
-					update_stop_wc(&motor_notches[id][jj][kk], local_motor_w[jj], 250, 100);
+					for (ll = 0; ll < NUM_IMU_HARMONICS; ll++ )
+					{
+						update_stop_wc(&motor_notches[id][jj][kk][ll], local_motor_w[jj] * (ll + 1), 250, 100);
+					}
 				}
-				filtered_data[i].accl_ms2[0] = rc_filter_march(&motor_notches[id][jj][0], data[i].accl_ms2[0]);
-				filtered_data[i].accl_ms2[1] = rc_filter_march(&motor_notches[id][jj][1], data[i].accl_ms2[1]);
-				filtered_data[i].accl_ms2[2] = rc_filter_march(&motor_notches[id][jj][2], data[i].accl_ms2[2]);
-				filtered_data[i].gyro_rad[0] = rc_filter_march(&motor_notches[id][jj][3], data[i].gyro_rad[0]);
-				filtered_data[i].gyro_rad[1] = rc_filter_march(&motor_notches[id][jj][4], data[i].gyro_rad[1]);
-				filtered_data[i].gyro_rad[2] = rc_filter_march(&motor_notches[id][jj][5], data[i].gyro_rad[2]);
+				for (ll = 0; ll < NUM_IMU_HARMONICS; ll++)
+				{
+					filtered_data[i].accl_ms2[0] = rc_filter_march(&motor_notches[id][jj][0][ll], data[i].accl_ms2[0]);
+					filtered_data[i].accl_ms2[1] = rc_filter_march(&motor_notches[id][jj][1][ll], data[i].accl_ms2[1]);
+					filtered_data[i].accl_ms2[2] = rc_filter_march(&motor_notches[id][jj][2][ll], data[i].accl_ms2[2]);
+					filtered_data[i].gyro_rad[0] = rc_filter_march(&motor_notches[id][jj][3][ll], data[i].gyro_rad[0]);
+					filtered_data[i].gyro_rad[1] = rc_filter_march(&motor_notches[id][jj][4][ll], data[i].gyro_rad[1]);
+					filtered_data[i].gyro_rad[2] = rc_filter_march(&motor_notches[id][jj][5][ll], data[i].gyro_rad[2]);
+				}
 			}
 		}
-		
 		if(packets_read>0){
 			pipe_server_write(N_IMUS * 2 + id, (char*)data, packets_read*sizeof(imu_data_t));
 		}
-
 		for(i = 0; i < packets_read; i++)
 		{
 			data[i].accl_ms2[0] = filtered_data[i].accl_ms2[0];
@@ -796,8 +800,11 @@ int main(int argc, char* argv[])
 		{
 			for (int kk = 0; kk < NUM_IMU_AXIS; kk++)
 			{
-				motor_notches[i][jj][kk] = RC_FILTER_INITIALIZER;
-				rc_filter_bandstop(&motor_notches[i][jj][kk], 2,  1.0 / imu_sample_rate_hz[i], 315, 250, 40);
+				for (int ll = 0; ll < NUM_IMU_HARMONICS; ll++)
+				{
+					motor_notches[i][jj][kk][ll] = RC_FILTER_INITIALIZER;
+					rc_filter_bandstop(&motor_notches[i][jj][kk][ll], 2,  1.0 / imu_sample_rate_hz[i], 315 * (ll + 1), 250, 40);
+				}
 			}
 		}
 	}

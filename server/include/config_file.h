@@ -51,6 +51,8 @@ extern double imu_sample_rate_hz[N_IMUS];
 extern double imu_lp_cutoff_freq_hz[N_IMUS];
 extern int imu_rotate_common_frame[N_IMUS];
 extern double imu_fifo_poll_rate_hz[N_IMUS];
+extern double filter_attenuation[N_IMUS];
+
 
 /**
  * load the config file and populate the above extern variables
